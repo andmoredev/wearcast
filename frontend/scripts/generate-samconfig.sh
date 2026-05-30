@@ -25,7 +25,7 @@ if [ ${#missing_vars[@]} -ne 0 ]; then
     printf '%s\n' "${missing_vars[@]}"
     echo ""
     echo "Please set the following variables:"
-    echo "export STACK_NAME=\"agentcore-chatbot-frontend\""
+    echo "export STACK_NAME=\"wearcast-frontend\""
     echo "export AWS_REGION=\"us-east-1\""
     exit 1
 fi

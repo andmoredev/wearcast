@@ -7,7 +7,7 @@ default:
       region: ${AWS_REGION}
       capabilities: CAPABILITY_IAM
       confirm_changeset: false
-      s3_prefix: agentcore-chatbot-frontend
+      s3_prefix: wearcast-frontend
       disable_rollback: false
 
   deploy:
@@ -16,11 +16,10 @@ default:
       region: ${AWS_REGION}
       capabilities: CAPABILITY_IAM
       confirm_changeset: false
-      s3_prefix: agentcore-chatbot-frontend
+      s3_prefix: wearcast-frontend
       disable_rollback: false
       tags:
-        - caylent:owner=andres.moreno@caylent.com thiago.ianino@caylent.com
-        - caylent:workload=GenAI-POV
+        - workload=WearCast
 
   delete:
     parameters:

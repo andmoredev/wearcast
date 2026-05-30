@@ -7,7 +7,7 @@ default:
       region: ${AWS_REGION}
       capabilities: CAPABILITY_IAM
       confirm_changeset: false
-      s3_prefix: agentcore-chatbot-backend
+      s3_prefix: wearcast-backend
       disable_rollback: false
 
   build:
@@ -21,7 +21,7 @@ default:
       region: ${AWS_REGION}
       capabilities: CAPABILITY_IAM
       confirm_changeset: false
-      s3_prefix: agentcore-chatbot-backend
+      s3_prefix: wearcast-backend
       disable_rollback: false
       parameter_overrides:
         - ArtifactsBucketName=$ARTIFACTS_BUCKET_NAME

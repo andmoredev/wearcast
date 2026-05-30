@@ -5,8 +5,8 @@
 set -e
 
 # Default values
-BACKEND_STACK_NAME="${BACKEND_STACK_NAME:-agentcore-chatbot-backend-andmored}"
-FRONTEND_STACK_NAME="${FRONTEND_STACK_NAME:-agentcore-chatbot-frontend-andmored}"
+BACKEND_STACK_NAME="${BACKEND_STACK_NAME:-wearcast-backend-andmored}"
+FRONTEND_STACK_NAME="${FRONTEND_STACK_NAME:-wearcast-frontend-andmored}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 
 echo "Fetching configuration from backend stack: $BACKEND_STACK_NAME"

@@ -15,7 +15,7 @@ concurrency:
 
 env:
   AWS_REGION: us-east-1
-  STACK_NAME: agentcore-chatbot-backend
+  STACK_NAME: wearcast-backend
   NODE_VERSION: '24'
 
 permissions:

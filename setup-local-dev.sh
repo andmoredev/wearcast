@@ -10,7 +10,7 @@ echo "============================================"
 echo ""
 
 # Default values
-BACKEND_STACK_NAME="${BACKEND_STACK_NAME:-agentcore-chatbot-backend-dev}"
+BACKEND_STACK_NAME="${BACKEND_STACK_NAME:-wearcast-backend-dev}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 SKIP_BACKEND_DEPLOY="${SKIP_BACKEND_DEPLOY:-false}"
 

@@ -1,5 +1,5 @@
 {
-  "name": "agentcore-chatbot-backend",
+  "name": "wearcast-backend",
   "version": "1.0.0",
   "description": "Backend Lambda functions for AgentCore Chatbot",
   "type": "module",
