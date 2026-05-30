@@ -13,7 +13,7 @@ function Navigation() {
   return (
     <nav className="navigation">
       <div className="nav-brand">
-        <h2>AgentCore Chatbot</h2>
+        <h2>WearCast</h2>
       </div>
       <div className="nav-links">
         {isAuthenticated ? (

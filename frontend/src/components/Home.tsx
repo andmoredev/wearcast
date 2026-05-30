@@ -26,8 +26,8 @@ function Home() {
   return (
     <div className="home">
       <div className="home-header">
-        <h1>AgentCore Chatbot</h1>
-        <p>Ask me anything - I'm here to help</p>
+        <h1>WearCast</h1>
+        <p>Tell me a city and I'll tell you what to wear</p>
       </div>
 
       <div className="home-chat-container">
@@ -37,7 +37,7 @@ function Home() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="What would you like to know?"
+              placeholder="Ask about a city — e.g. What should I wear in Indianapolis today?"
               className="home-chat-input"
               rows={3}
             />
@@ -60,21 +60,21 @@ function Home() {
         <div className="example-queries">
           <button
             className="example-query"
-            onClick={() => setQuery("What can you help me with?")}
+            onClick={() => setQuery("What should I wear in Indianapolis today?")}
           >
-            "What can you help me with?"
+            "What should I wear in Indianapolis today?"
           </button>
           <button
             className="example-query"
-            onClick={() => setQuery("Explain how to get started with AWS Bedrock")}
+            onClick={() => setQuery("What's the weather like in Chicago and how should I dress?")}
           >
-            "Explain how to get started with AWS Bedrock"
+            "What's the weather like in Chicago and how should I dress?"
           </button>
           <button
             className="example-query"
-            onClick={() => setQuery("Help me brainstorm ideas for my project")}
+            onClick={() => setQuery("I'm heading to Seattle — do I need a rain jacket?")}
           >
-            "Help me brainstorm ideas for my project"
+            "I'm heading to Seattle — do I need a rain jacket?"
           </button>
         </div>
       </div>
