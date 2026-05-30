@@ -1,0 +1,196 @@
+name: 'Build and Push Docker Image'
+description: 'Builds a Docker image for AgentCore agent and pushes to Amazon ECR'
+author: 'AgentCore Chatbot Team'
+
+inputs:
+  agent-name:
+    description: 'Name of the agent (used for ECR repository name)'
+    required: true
+  agent-path:
+    description: 'Path to agent directory containing Dockerfile (e.g., backend/agents/agent)'
+    required: true
+  aws-region:
+    description: 'AWS region for ECR'
+    required: false
+    default: 'us-east-1'
+  image-tag:
+    description: 'Tag for the Docker image (e.g., latest, v1.0.0, or git commit SHA)'
+    required: false
+    default: 'latest'
+  ecr-repository-name:
+    description: 'ECR repository name (defaults to agent-name)'
+    required: false
+    default: ''
+
+outputs:
+  image-uri:
+    description: 'Full ECR image URI (e.g., 123456789012.dkr.ecr.us-east-1.amazonaws.com/agent:tag)'
+    value: ${{ steps.build-push.outputs.image_uri }}
+  image-tag:
+    description: 'Tag applied to the image'
+    value: ${{ steps.build-push.outputs.image_tag }}
+  ecr-repository:
+    description: 'ECR repository name'
+    value: ${{ steps.build-push.outputs.ecr_repository }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Validate inputs
+      shell: bash
+      run: |
+        echo "::group::Validating inputs"
+
+        if [ -z "${{ inputs.agent-name }}" ]; then
+          echo "::error::agent-name input is required"
+          exit 1
+        fi
+
+        if [ -z "${{ inputs.agent-path }}" ]; then
+          echo "::error::agent-path input is required"
+          exit 1
+        fi
+
+        if [ ! -d "${{ inputs.agent-path }}" ]; then
+          echo "::error::Agent directory not found: ${{ inputs.agent-path }}"
+          exit 1
+        fi
+
+        if [ ! -f "${{ inputs.agent-path }}/Dockerfile" ]; then
+          echo "::error::Dockerfile not found in ${{ inputs.agent-path }}"
+          exit 1
+        fi
+
+        echo "✓ All required files found for agent: ${{ inputs.agent-name }}"
+        echo "::endgroup::"
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Get AWS account ID
+      id: aws-account
+      shell: bash
+      run: |
+        AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        echo "account_id=$AWS_ACCOUNT_ID" >> $GITHUB_OUTPUT
+        echo "AWS Account ID: $AWS_ACCOUNT_ID"
+
+    - name: Login to Amazon ECR
+      shell: bash
+      env:
+        AWS_REGION: ${{ inputs.aws-region }}
+      run: |
+        echo "::group::Logging in to Amazon ECR"
+        aws ecr get-login-password --region $AWS_REGION | \
+          docker login --username AWS --password-stdin \
+          ${{ steps.aws-account.outputs.account_id }}.dkr.ecr.$AWS_REGION.amazonaws.com
+        echo "✓ Successfully logged in to ECR"
+        echo "::endgroup::"
+
+    - name: Create ECR repository if not exists
+      shell: bash
+      env:
+        AWS_REGION: ${{ inputs.aws-region }}
+        REPO_NAME: ${{ inputs.ecr-repository-name || inputs.agent-name }}
+      run: |
+        echo "::group::Creating ECR repository"
+        echo "Repository name: $REPO_NAME"
+        
+        if aws ecr describe-repositories --repository-names "$REPO_NAME" --region $AWS_REGION 2>/dev/null; then
+          echo "✓ ECR repository '$REPO_NAME' already exists"
+        else
+          echo "Creating ECR repository '$REPO_NAME'..."
+          aws ecr create-repository \
+            --repository-name "$REPO_NAME" \
+            --region $AWS_REGION \
+            --image-scanning-configuration scanOnPush=true \
+            --encryption-configuration encryptionType=AES256
+          echo "✓ ECR repository '$REPO_NAME' created successfully"
+        fi
+        echo "::endgroup::"
+
+    - name: Build and push Docker image
+      id: build-push
+      shell: bash
+      env:
+        AWS_REGION: ${{ inputs.aws-region }}
+        AGENT_PATH: ${{ inputs.agent-path }}
+        IMAGE_TAG: ${{ inputs.image-tag }}
+        REPO_NAME: ${{ inputs.ecr-repository-name || inputs.agent-name }}
+      run: |
+        echo "::group::Building and pushing Docker image"
+
+        AWS_ACCOUNT_ID="${{ steps.aws-account.outputs.account_id }}"
+        ECR_REGISTRY="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+        IMAGE_URI="$ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG"
+
+        echo "Building Docker image..."
+        echo "- Context: $AGENT_PATH"
+        echo "- Image URI: $IMAGE_URI"
+        echo "- Tag: $IMAGE_TAG"
+
+        # Use both GHA cache and ECR registry cache for maximum cache hit rate
+        # GHA cache: fast but branch-scoped, may not persist across workflow runs
+        # ECR registry cache: persistent, shared across all branches and workflows
+        CACHE_IMAGE="$ECR_REGISTRY/$REPO_NAME:buildcache"
+        
+        docker buildx build \
+          --platform linux/arm64 \
+          --tag "$IMAGE_URI" \
+          --cache-from type=gha,scope=$REPO_NAME \
+          --cache-from type=registry,ref=$CACHE_IMAGE \
+          --cache-to type=gha,mode=max,scope=$REPO_NAME \
+          --cache-to type=registry,ref=$CACHE_IMAGE,mode=max \
+          --push \
+          "$AGENT_PATH"
+
+        # Set outputs
+        echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
+        echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+        echo "ecr_repository=$REPO_NAME" >> $GITHUB_OUTPUT
+
+        echo "✓ Successfully built and pushed Docker image"
+        echo "::endgroup::"
+
+    - name: Get image details
+      id: image-details
+      shell: bash
+      env:
+        AWS_REGION: ${{ inputs.aws-region }}
+        REPO_NAME: ${{ inputs.ecr-repository-name || inputs.agent-name }}
+        IMAGE_TAG: ${{ inputs.image-tag }}
+      run: |
+        echo "::group::Getting image details"
+        
+        # Get image size and digest
+        IMAGE_DETAILS=$(aws ecr describe-images \
+          --repository-name "$REPO_NAME" \
+          --image-ids imageTag="$IMAGE_TAG" \
+          --region $AWS_REGION \
+          --query 'imageDetails[0]' \
+          --output json)
+        
+        IMAGE_SIZE_MB=$(echo "$IMAGE_DETAILS" | jq -r '.imageSizeInBytes' | awk '{printf "%.2f MB", $1/1024/1024}')
+        IMAGE_DIGEST=$(echo "$IMAGE_DETAILS" | jq -r '.imageDigest')
+        PUSHED_AT=$(echo "$IMAGE_DETAILS" | jq -r '.imagePushedAt')
+        
+        echo "IMAGE_SIZE_MB=$IMAGE_SIZE_MB" >> $GITHUB_ENV
+        echo "IMAGE_DIGEST=$IMAGE_DIGEST" >> $GITHUB_ENV
+        
+        echo "✓ Image size: $IMAGE_SIZE_MB"
+        echo "✓ Image digest: $IMAGE_DIGEST"
+        echo "::endgroup::"
+
+    - name: Add to workflow summary
+      shell: bash
+      run: |
+        echo "### 🐳 Docker Image: ${{ inputs.agent-name }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **Image URI:** \`${{ steps.build-push.outputs.image_uri }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Image Tag:** \`${{ steps.build-push.outputs.image_tag }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **ECR Repository:** \`${{ steps.build-push.outputs.ecr_repository }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Image Size:** ${{ env.IMAGE_SIZE_MB }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Image Digest:** \`${{ env.IMAGE_DIGEST }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Platform:** linux/arm64" >> $GITHUB_STEP_SUMMARY
+        echo "- **AWS Region:** ${{ inputs.aws-region }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,7 @@
+templates:
+  - template.yaml
+ignore_checks:
+  # E0001: False positive - CognitoAuthorizer is defined in openapi.yaml
+  # which is included via Fn::Transform: AWS::Include, but cfn-lint
+  # cannot resolve the transform to find the authorizer definition.
+  - E0001

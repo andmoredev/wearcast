@@ -1,0 +1,263 @@
+name: Deploy Frontend
+run-name: Deploy Frontend - ${{ github.actor }}
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-deploy.yaml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-frontend-${{ github.actor }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: us-east-1
+  STACK_NAME: agentcore-chatbot-frontend
+  BACKEND_STACK_NAME: agentcore-chatbot-backend
+  NODE_VERSION: '24'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  prepare-deployment:
+    name: Prepare Deployment
+    runs-on: ubuntu-latest
+    outputs:
+      env_descriptor: ${{ steps.prepare-parameters.outputs.env_descriptor }}
+      env_hash: ${{ steps.prepare-parameters.outputs.env_hash }}
+      env_name: ${{ steps.prepare-parameters.outputs.env_name }}
+      backend_stack_name: ${{ steps.prepare-parameters.outputs.backend_stack_name }}
+      frontend_stack_name: ${{ steps.prepare-parameters.outputs.frontend_stack_name }}
+    steps:
+      - name: Prepare parameters
+        id: prepare-parameters
+        run: |
+          ENV_DESCRIPTOR="${{ github.actor }}"
+          ENV_HASH=$(echo -n "$ENV_DESCRIPTOR" | sha1sum | cut -c1-6)
+          ENV_NAME="${{ github.actor }}"
+          BACKEND_STACK_NAME="${{ env.BACKEND_STACK_NAME }}-$ENV_DESCRIPTOR"
+          FRONTEND_STACK_NAME="${{env.STACK_NAME }}-$ENV_DESCRIPTOR"
+
+          echo "env_descriptor=$ENV_DESCRIPTOR" >> $GITHUB_OUTPUT
+          echo "env_hash=$ENV_HASH" >> $GITHUB_OUTPUT
+          echo "env_name=$ENV_NAME" >> $GITHUB_OUTPUT
+          echo "backend_stack_name=$BACKEND_STACK_NAME" >> $GITHUB_OUTPUT
+          echo "frontend_stack_name=$FRONTEND_STACK_NAME" >> $GITHUB_OUTPUT
+
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          # Preview Deployment
+          * Environment Descriptor: \`$ENV_DESCRIPTOR\`
+          * Environment Hash: \`$ENV_HASH\`
+          * Backend Stack: \`$BACKEND_STACK_NAME\`
+          * Frontend Stack: \`$FRONTEND_STACK_NAME\`
+          EOF
+
+  deploy-infrastructure:
+    needs: prepare-deployment
+    runs-on: ubuntu-latest
+    outputs:
+      bucket-name: ${{ steps.deploy.outputs.bucket-name }}
+      distribution-id: ${{ steps.deploy.outputs.distribution-id }}
+      cloudfront-url: ${{ steps.deploy.outputs.cloudfront-url }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.PIPELINE_EXECUTION_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Generate samconfig.yaml from template
+        working-directory: frontend
+        env:
+          STACK_NAME: ${{ needs.prepare-deployment.outputs.frontend_stack_name }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+        run: |
+          envsubst < samconfig.yaml.template > samconfig.yaml
+          echo "Generated samconfig.yaml:"
+          cat samconfig.yaml
+
+      - name: Deploy infrastructure
+        id: deploy
+        working-directory: frontend
+        env:
+          STACK_NAME: ${{ needs.prepare-deployment.outputs.frontend_stack_name }}
+        run: |
+          sam build
+
+          sam deploy \
+            --s3-bucket "${{ secrets.ARTIFACTS_BUCKET_NAME }}" \
+            --role-arn "${{ secrets.CLOUDFORMATION_EXECUTION_ROLE }}" \
+            --no-fail-on-empty-changeset
+
+          # Get stack outputs
+          BUCKET_NAME=$(aws cloudformation describe-stacks \
+            --stack-name "${{ env.STACK_NAME }}" \
+            --query 'Stacks[0].Outputs[?OutputKey==`BucketName`].OutputValue' \
+            --output text)
+
+          DISTRIBUTION_ID=$(aws cloudformation describe-stacks \
+            --stack-name "${{ env.STACK_NAME }}" \
+            --query 'Stacks[0].Outputs[?OutputKey==`DistributionId`].OutputValue' \
+            --output text)
+
+          CLOUDFRONT_URL=$(aws cloudformation describe-stacks \
+            --stack-name "${{ env.STACK_NAME }}" \
+            --query 'Stacks[0].Outputs[?OutputKey==`CloudFrontUrl`].OutputValue' \
+            --output text)
+
+          echo "bucket-name=$BUCKET_NAME" >> $GITHUB_OUTPUT
+          echo "distribution-id=$DISTRIBUTION_ID" >> $GITHUB_OUTPUT
+          echo "cloudfront-url=$CLOUDFRONT_URL" >> $GITHUB_OUTPUT
+
+          # Add to GitHub Summary
+          echo "## 🏗️ Infrastructure Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Resource | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Stack Name** | \`${{ env.STACK_NAME }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **S3 Bucket** | \`$BUCKET_NAME\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **CloudFront Distribution** | \`$DISTRIBUTION_ID\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **CloudFront URL** | [$CLOUDFRONT_URL]($CLOUDFRONT_URL) |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "Infrastructure deployed successfully:"
+          echo "Bucket Name: $BUCKET_NAME"
+          echo "Distribution ID: $DISTRIBUTION_ID"
+          echo "CloudFront URL: $CLOUDFRONT_URL"
+
+  build-and-deploy-app:
+    runs-on: ubuntu-latest
+    needs: [deploy-infrastructure, prepare-deployment]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Configure AWS for API config fetch
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.PIPELINE_EXECUTION_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build React application with API configuration
+        working-directory: frontend
+        env:
+          BACKEND_STACK_NAME: ${{ needs.prepare-deployment.outputs.backend_stack_name }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+        run: |
+          echo "🔍 Building frontend with configuration from backend stack..."
+          echo "   Backend Stack: $BACKEND_STACK_NAME"
+          echo "   Region: $AWS_REGION"
+          echo ""
+          echo "Configuration will be automatically fetched from CloudFormation stack outputs:"
+          echo "   - Backend API URL"
+          echo ""
+
+          npm run build:with-api
+
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.PIPELINE_EXECUTION_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload to S3 with cache headers
+        working-directory: frontend
+        run: |
+          BUCKET_NAME="${{ needs.deploy-infrastructure.outputs.bucket-name }}"
+
+          aws s3 sync dist s3://$BUCKET_NAME \
+            --delete \
+            --cache-control "public,max-age=31536000,immutable" \
+            --exclude "index.html" \
+            --exclude "*.txt"
+
+          aws s3 cp dist/index.html s3://$BUCKET_NAME/index.html \
+            --cache-control "public,max-age=0,must-revalidate"
+
+          echo "Files uploaded to S3 bucket: $BUCKET_NAME"
+
+          # Add build info to GitHub Summary
+          echo "## 📦 Application Build & Upload Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ React application built with API configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Backend API URL automatically configured from stack outputs" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Static assets uploaded to S3: \`$BUCKET_NAME\`" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Cache headers configured for optimal performance" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+      - name: Invalidate CloudFront cache
+        run: |
+          DISTRIBUTION_ID="${{ needs.deploy-infrastructure.outputs.distribution-id }}"
+
+          aws cloudfront create-invalidation \
+            --distribution-id $DISTRIBUTION_ID \
+            --paths "/*"
+
+          echo "CloudFront cache invalidation created for distribution: $DISTRIBUTION_ID"
+
+          # Add invalidation info to GitHub Summary
+          echo "## 🔄 CloudFront Cache Invalidation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Cache invalidation initiated for distribution: \`$DISTRIBUTION_ID\`" >> $GITHUB_STEP_SUMMARY
+          echo "- ⏳ Changes will be available globally within 5-10 minutes" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+      - name: Output deployment URL
+        run: |
+          CLOUDFRONT_URL="${{ needs.deploy-infrastructure.outputs.cloudfront-url }}"
+          BUCKET_NAME="${{ needs.deploy-infrastructure.outputs.bucket-name }}"
+          DISTRIBUTION_ID="${{ needs.deploy-infrastructure.outputs.distribution-id }}"
+
+          echo "🚀 Frontend deployed successfully!"
+          echo "📱 Application URL: $CLOUDFRONT_URL"
+          echo "::notice title=Deployment Complete::Frontend is available at $CLOUDFRONT_URL"
+
+          # Add final deployment summary to GitHub Summary
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🎉 Frontend Successfully Deployed!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**🌐 Live Application:** [$CLOUDFRONT_URL]($CLOUDFRONT_URL)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📋 Deployment Details" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status | Details |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|---------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Infrastructure** | ✅ Deployed | Stack: \`${{ env.STACK_NAME }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **React Build** | ✅ Complete | Production optimized build |" >> $GITHUB_STEP_SUMMARY
+          echo "| **S3 Upload** | ✅ Complete | Bucket: \`$BUCKET_NAME\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **CloudFront** | ✅ Invalidated | Distribution: \`$DISTRIBUTION_ID\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ⚡ Performance Optimizations" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- 🎯 **Cache Strategy**: HTML files (no-cache), Assets (1-year cache)" >> $GITHUB_STEP_SUMMARY
+          echo "- 🌍 **Global CDN**: CloudFront distribution for worldwide access" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔒 **Security**: HTTPS redirect and secure headers enabled" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔗 Quick Links" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Application**: [$CLOUDFRONT_URL]($CLOUDFRONT_URL)" >> $GITHUB_STEP_SUMMARY
+          echo "- **AWS Console**: [CloudFormation Stack](https://console.aws.amazon.com/cloudformation/home?region=${{ env.AWS_REGION }}#/stacks/stackinfo?stackId=${{ env.STACK_NAME }})" >> $GITHUB_STEP_SUMMARY
+          echo "- **S3 Bucket**: [S3 Console](https://s3.console.aws.amazon.com/s3/buckets/$BUCKET_NAME)" >> $GITHUB_STEP_SUMMARY
+          echo "- **CloudFront**: [CloudFront Console](https://console.aws.amazon.com/cloudfront/v3/home#/distributions/$DISTRIBUTION_ID)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY

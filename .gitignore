@@ -1,0 +1,23 @@
+.aws-sam/
+samconfig.yaml
+.kiro/
+.DS_Store
+
+# Backend
+backend/node_modules/
+backend/.aws-sam/
+backend/dist/
+backend/coverage/
+
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+venv/
+.env.local

@@ -1,0 +1,17 @@
+.layout-header {
+  position: fixed;
+  top: 0;
+  right: 0;
+  padding: 1rem 1.5rem;
+  z-index: 999;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .layout-header {
+    padding: 0.75rem 1rem;
+  }
+}

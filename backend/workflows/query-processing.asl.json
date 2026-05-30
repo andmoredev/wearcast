@@ -1,0 +1,78 @@
+{
+  "Comment": "Invoke AgentCore Runtime and return the response",
+  "StartAt": "InvokeAgentCoreRuntime",
+  "TimeoutSeconds": 900,
+  "States": {
+    "InvokeAgentCoreRuntime": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${AgentCoreInvokeFunctionArn}",
+        "Payload": {
+          "sessionId.$": "$$.Execution.Input.sessionId",
+          "userId.$": "$$.Execution.Input.userId",
+          "request.$": "$$.Execution.Input.request"
+        }
+      },
+      "ResultSelector": {
+        "sessionId.$": "$.Payload.sessionId",
+        "request.$": "$.Payload.request",
+        "response.$": "$.Payload.response",
+        "status.$": "$.Payload.status"
+      },
+      "TimeoutSeconds": 600,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.Timeout"
+          ],
+          "Next": "HandleTimeout",
+          "ResultPath": "$.error"
+        },
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "HandleError",
+          "ResultPath": "$.error"
+        }
+      ],
+      "End": true
+    },
+    "HandleTimeout": {
+      "Type": "Pass",
+      "Result": {
+        "status": "error",
+        "error": {
+          "type": "timeout",
+          "message": "AgentCore Runtime execution exceeded timeout limit"
+        }
+      },
+      "End": true
+    },
+    "HandleError": {
+      "Type": "Pass",
+      "Parameters": {
+        "status": "error",
+        "error": {
+          "type": "execution_error",
+          "message": "An error occurred during processing",
+          "details.$": "$.error"
+        }
+      },
+      "End": true
+    }
+  }
+}
