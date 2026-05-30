@@ -263,14 +263,16 @@ function Chat() {
             </svg>
           </button>
           <h2>WearCast</h2>
-          <div className={`connection-status ${connectionStatus}`}>
-            <span className="status-dot"></span>
-            <span className="status-text">
-              {connectionStatus === 'connected' && 'Connected'}
-              {connectionStatus === 'connecting' && 'Connecting'}
-              {connectionStatus === 'disconnected' && 'Offline'}
-            </span>
-          </div>
+          {sessionId && (
+            <div className={`connection-status ${connectionStatus}`}>
+              <span className="status-dot"></span>
+              <span className="status-text">
+                {connectionStatus === 'connected' && 'Connected'}
+                {connectionStatus === 'connecting' && 'Connecting'}
+                {connectionStatus === 'disconnected' && 'Offline'}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -384,10 +386,14 @@ function Chat() {
           onClick={handleSendMessage}
           disabled={isLoading || !inputText.trim() || connectionStatus !== 'connected'}
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="m22 2-7 20-4-9-9-4z"/>
-            <path d="M22 2 11 13"/>
-          </svg>
+          {isLoading ? (
+            <div className="button-spinner"></div>
+          ) : (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="m22 2-7 20-4-9-9-4z"/>
+              <path d="M22 2 11 13"/>
+            </svg>
+          )}
         </button>
       </div>
     </div>

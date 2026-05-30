@@ -1,5 +1,5 @@
 import { ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import UserMenu from './UserMenu'
 import './Layout.css'
 
@@ -8,12 +8,10 @@ interface LayoutProps {
 }
 
 function Layout({ children }: LayoutProps) {
-  const navigate = useNavigate()
-
   return (
     <div className="layout">
       <header className="layout-header">
-        <a className="layout-brand" onClick={() => navigate('/')}>WearCast</a>
+        <Link to="/" className="layout-brand">WearCast</Link>
         <UserMenu />
       </header>
       <main className="main-content">
