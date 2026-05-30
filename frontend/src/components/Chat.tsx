@@ -259,7 +259,7 @@ function Chat() {
           >
             ← Home
           </button>
-          <h2>AgentCore Chatbot (WebSocket)</h2>
+          <h2>WearCast</h2>
         </div>
         {sessionId && (
           <div className="session-info">
@@ -378,7 +378,7 @@ function Chat() {
           onKeyDown={handleKeyDown}
           placeholder={
             connectionStatus === 'connected'
-              ? 'Type your message...'
+              ? 'Ask about a city — e.g. What about Chicago?'
               : 'Connecting...'
           }
           rows={3}

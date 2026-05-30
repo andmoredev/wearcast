@@ -1,11 +1,11 @@
 """
-Generic Assistant Agent - AgentCore Runtime with WebSocket Streaming
+WearCast Agent - AgentCore Runtime with WebSocket Streaming
 
-A conversational assistant with:
+A weather-based clothing advisor with:
 - Real-time streaming via WebSocket
 - Memory persistence across conversations
 - JWT-based user authentication
-- Tool access (memory, LLM)
+- get_weather tool (Open-Meteo, no API key required)
 
 Required Environment Variables:
     - AGENTCORE_MEMORY_ID: AgentCore Memory resource ID for conversation persistence
@@ -17,8 +17,10 @@ Optional Environment Variables:
 
 import os
 import json
+import urllib.request
+import urllib.parse
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
-from strands import Agent
+from strands import Agent, tool
 from strands_tools import use_llm, memory
 from strands.models import BedrockModel
 from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig
@@ -38,15 +40,116 @@ if not AGENTCORE_MEMORY_ID:
     raise ValueError("AGENTCORE_MEMORY_ID environment variable is required but not set")
 
 # ============================================================================
+# Weather tool
+# ============================================================================
 
-SYSTEM_PROMPT = """You are a helpful assistant. You can have multi-turn conversations with users,
-remembering context from previous messages using your memory tool.
+# WMO weather interpretation codes → human-readable condition strings
+_WMO_CONDITIONS = {
+    0: "clear sky",
+    1: "mainly clear",
+    2: "partly cloudy",
+    3: "overcast",
+    45: "foggy",
+    48: "icy fog",
+    51: "light drizzle",
+    53: "moderate drizzle",
+    55: "heavy drizzle",
+    61: "light rain",
+    63: "moderate rain",
+    65: "heavy rain",
+    71: "light snow",
+    73: "moderate snow",
+    75: "heavy snow",
+    77: "snow grains",
+    80: "light showers",
+    81: "moderate showers",
+    82: "heavy showers",
+    85: "light snow showers",
+    86: "heavy snow showers",
+    95: "thunderstorm",
+    96: "thunderstorm with light hail",
+    99: "thunderstorm with heavy hail",
+}
 
-When responding:
-- Be concise and helpful
-- Use your memory tool to recall previous conversation context when relevant
-- Format responses in Markdown when appropriate
-- If you're unsure about something, ask for clarification"""
+
+@tool
+def get_weather(city: str) -> dict:
+    """Get current weather conditions for a city to inform clothing recommendations.
+
+    Makes two calls to Open-Meteo (no API key required):
+    1. Geocoding to resolve city name to lat/lon.
+    2. Forecast for current temperature, feels-like, precipitation, and wind.
+
+    Args:
+        city: City name to look up (e.g. "Indianapolis", "Chicago").
+
+    Returns:
+        Dict with keys: city, temperature, feels_like, precipitation, wind_speed, condition.
+        All temperatures in °F, wind in km/h, precipitation in mm.
+        Returns {"error": str} if the city is not found.
+    """
+    # Step 1 — geocode
+    geo_url = (
+        "https://geocoding-api.open-meteo.com/v1/search"
+        f"?name={urllib.parse.quote(city)}&count=1"
+    )
+    with urllib.request.urlopen(geo_url, timeout=10) as resp:
+        geo_data = json.loads(resp.read())
+
+    results = geo_data.get("results")
+    if not results:
+        return {"error": f"City not found: {city}"}
+
+    place = results[0]
+    lat, lon = place["latitude"], place["longitude"]
+    resolved_name = place.get("name", city)
+
+    # Step 2 — current conditions
+    forecast_url = (
+        "https://api.open-meteo.com/v1/forecast"
+        f"?latitude={lat}&longitude={lon}"
+        "&current=temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m"
+        "&temperature_unit=fahrenheit"
+    )
+    with urllib.request.urlopen(forecast_url, timeout=10) as resp:
+        forecast_data = json.loads(resp.read())
+
+    current = forecast_data["current"]
+    code = current["weather_code"]
+    condition = _WMO_CONDITIONS.get(code, f"weather code {code}")
+
+    return {
+        "city": resolved_name,
+        "temperature": current["temperature_2m"],
+        "feels_like": current["apparent_temperature"],
+        "precipitation": current["precipitation"],
+        "wind_speed": current["wind_speed_10m"],
+        "condition": condition,
+    }
+
+
+# ============================================================================
+
+SYSTEM_PROMPT = """You are WearCast, a friendly weather-based clothing advisor. \
+When the user asks about a city, call the get_weather tool once to fetch current \
+conditions, then give practical outfit recommendations.
+
+Reasoning guidelines:
+- Base advice on feels_like (apparent temperature), not raw temperature.
+- Recommend an umbrella or rain jacket if precipitation > 0 mm.
+- Suggest a windbreaker or extra layer if wind_speed > 20 km/h.
+- Layer advice: heavy coat < 20 °F, winter coat 20–35 °F, jacket 35–55 °F, \
+light layer 55–70 °F, light clothing > 70 °F.
+- Combine all factors into one coherent recommendation (e.g. "light jacket + \
+umbrella" rather than listing rules).
+
+Response style:
+- Write 3–5 sentences so the token stream is visibly satisfying.
+- Start with the city name and the plain-English condition (from the tool result).
+- End with a concrete outfit recommendation.
+- Use your memory tool to remember the conversation so follow-up questions like \
+"What about Chicago?" are understood in context.
+- Format responses in Markdown."""
 
 
 def create_session_manager(runtime_session_id: str, user_id: str = None):
@@ -120,9 +223,9 @@ async def websocket_handler(websocket, context):
                 session_manager = create_session_manager(session_id, user_id)
 
                 agent = Agent(
-                    agent_id="assistant",
+                    agent_id="wearcast",
                     model=BedrockModel(model_id=BEDROCK_MODEL_ID),
-                    tools=[memory, use_llm],
+                    tools=[get_weather, memory, use_llm],
                     system_prompt=SYSTEM_PROMPT,
                     session_manager=session_manager,
                 )
@@ -142,10 +245,10 @@ async def websocket_handler(websocket, context):
                     client_event = {"data": event["data"]}
 
                 elif event.get("current_tool_use"):
-                    tool = event["current_tool_use"]
-                    tool_name = tool.get("name")
+                    tool_use = event["current_tool_use"]
+                    tool_name = tool_use.get("name")
                     if tool_name:
-                        client_event = {"current_tool_use": {"name": tool_name, "tool_use_id": tool.get("tool_use_id")}}
+                        client_event = {"current_tool_use": {"name": tool_name, "tool_use_id": tool_use.get("tool_use_id")}}
                         print(f"Tool use: {tool_name}")
 
                 elif event.get("init_event_loop"):
@@ -227,13 +330,12 @@ def invoke(payload):
             runtime_session_id = f"session_{uuid.uuid4().hex[:16]}"
             print(f"Warning: Generated session ID: {runtime_session_id}")
 
-        tools = [memory, use_llm]
         session_manager = create_session_manager(runtime_session_id, user_id)
 
         agent = Agent(
-            agent_id="assistant",
+            agent_id="wearcast",
             model=BedrockModel(model_id=BEDROCK_MODEL_ID),
-            tools=tools,
+            tools=[get_weather, memory, use_llm],
             system_prompt=SYSTEM_PROMPT,
             session_manager=session_manager,
         )
