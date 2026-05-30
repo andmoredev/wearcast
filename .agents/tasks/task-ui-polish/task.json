@@ -1,0 +1,7 @@
+{
+  "task_id": "task-ui-polish",
+  "task_description": "Complete UI overhaul of the WearCast frontend to make it look polished, modern, and presentation-ready for a live demo. Includes redesigned theme, auth pages, home page, chat interface, and micro-interactions.",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001", "FEAT-002"],
+  "blocked_reason": null
+}

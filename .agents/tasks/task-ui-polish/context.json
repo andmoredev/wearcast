@@ -1,0 +1,32 @@
+{
+  "project_type": "React + TypeScript + Vite frontend for an AI-powered weather/clothing chatbot",
+  "language": "TypeScript",
+  "build_system": "Vite with npm",
+  "test_framework": "No test framework configured in frontend",
+  "build_command": "cd /projects/sandbox/wearcast/frontend && npm run build",
+  "test_command": "cd /projects/sandbox/wearcast/frontend && npm run build",
+  "verification_instructions": "Run `npm run build` in the frontend directory to verify TypeScript compilation and Vite bundling succeeds without errors",
+  "snapshot_or_generated_files": null,
+  "setup_instructions": "cd /projects/sandbox/wearcast/frontend && npm install",
+  "environment_constraints": "COMMON_DEPENDENCIES network mode - can install npm packages. Node.js v22 available via nvm.",
+  "contribution_requirements": "No CONTRIBUTING.md found. Standard React/TypeScript conventions apply.",
+  "key_patterns": "Vanilla CSS with CSS custom properties for theming. Dark color scheme with orange accent (#FF6B35). Components use separate .css files imported directly. React Router for navigation. AuthContext for authentication state. WebSocket service for real-time chat streaming.",
+  "relevant_files": [
+    "/projects/sandbox/wearcast/frontend/src/index.css",
+    "/projects/sandbox/wearcast/frontend/src/App.css",
+    "/projects/sandbox/wearcast/frontend/src/components/Chat.tsx",
+    "/projects/sandbox/wearcast/frontend/src/components/Home.tsx",
+    "/projects/sandbox/wearcast/frontend/src/components/Login.tsx",
+    "/projects/sandbox/wearcast/frontend/src/components/Signup.tsx",
+    "/projects/sandbox/wearcast/frontend/src/components/Layout.tsx",
+    "/projects/sandbox/wearcast/frontend/src/components/Layout.css",
+    "/projects/sandbox/wearcast/frontend/src/components/UserMenu.tsx",
+    "/projects/sandbox/wearcast/frontend/src/components/UserMenu.css",
+    "/projects/sandbox/wearcast/frontend/src/components/Auth.css",
+    "/projects/sandbox/wearcast/frontend/src/components/Navigation.tsx",
+    "/projects/sandbox/wearcast/frontend/src/App.tsx",
+    "/projects/sandbox/wearcast/frontend/index.html",
+    "/projects/sandbox/wearcast/frontend/package.json"
+  ],
+  "directory_structure": "frontend/src/components/ - React components (Chat, Home, Login, Signup, Layout, UserMenu, Navigation). frontend/src/services/ - API, auth, websocket services. frontend/src/contexts/ - AuthContext. frontend/src/config/ - API config. Styling is split across index.css (global/theme), App.css (component styles), and component-specific .css files (Auth.css, Layout.css, UserMenu.css)."
+}

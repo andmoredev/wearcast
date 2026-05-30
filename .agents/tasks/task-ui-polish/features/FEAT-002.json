@@ -1,0 +1,31 @@
+{
+  "id": "FEAT-002",
+  "type": "feat",
+  "description": "Complete UI overhaul to make the WearCast app look polished and presentation-ready. Redesign the global theme, login/signup pages, home page, and chat interface with modern styling, smooth animations, glassmorphism effects, better typography via Google Fonts (Inter), and an overall professional look with wow-factor for a live demo.",
+  "status": "pending",
+  "steps": [
+    "Step 1 - Add Google Fonts: Update /projects/sandbox/wearcast/frontend/index.html to include Google Fonts link for 'Inter' font (weights 300, 400, 500, 600, 700) and 'JetBrains Mono' for code/monospace. Also update the page title to 'WearCast'.",
+    "Step 2 - Redesign global theme (index.css): Rewrite /projects/sandbox/wearcast/frontend/src/index.css with a refined color palette. Keep the dark theme foundation but elevate it: use deeper, richer background colors (e.g., #0a0f1a, #111827, #1f2937), a vibrant gradient primary accent (shifting from pure orange to a warm orange-to-coral gradient), improved text colors for better contrast, refined CSS custom properties, smooth global transitions, better scrollbar styling, and a subtle animated gradient background on body. Add CSS utility animations (fade-in, slide-up, scale-in) as reusable keyframes.",
+    "Step 3 - Redesign Auth pages (Auth.css): Rewrite /projects/sandbox/wearcast/frontend/src/components/Auth.css with an animated gradient background (subtle slow-moving color shift), a glassmorphism card effect (backdrop-filter blur, semi-transparent background, subtle border), improved form inputs with modern focus states (colored glow), a brand logo/title area above the form, smooth hover/focus transitions on buttons, and better error state styling. Add a subtle floating particles or geometric shapes effect using CSS-only animations for visual interest.",
+    "Step 4 - Redesign Home page: Update /projects/sandbox/wearcast/frontend/src/components/Home.tsx to include: a hero section with an animated gradient headline, a tagline with typewriter or fade-in effect, the input area styled as a premium search bar with glow effect on focus, example queries as pill-shaped chips with hover animations, and a subtle background decoration (CSS gradient orbs or grid pattern). Add entrance animations to elements using CSS classes.",
+    "Step 5 - Redesign Chat interface (Chat.tsx): Update /projects/sandbox/wearcast/frontend/src/components/Chat.tsx to improve the visual hierarchy: cleaner header with just the app name and connection status as a subtle pill badge, remove the session ID display from the main view (it's technical noise for a demo), style user messages as gradient bubbles with subtle shadow, style agent messages with a left accent border and clean background, add smooth entrance animations to new messages, improve the typing/streaming indicator with a modern pulse animation, and make the input area feel premium with a floating card style.",
+    "Step 6 - Overhaul App.css chat and component styles: Rewrite the chat-related styles in /projects/sandbox/wearcast/frontend/src/App.css to match the new design. Key changes: remove the duplicate/conflicting chat styles that exist in this file, keep the styles cleaner and more focused. Implement: modern message bubbles with proper spacing and max-width, a beautiful streaming indicator with animated gradient, glassmorphism chat container, smooth scroll behavior, refined input area with rounded corners and glow states, connection status as a minimal colored dot indicator, thinking/tool sections with collapsible accordion style, and proper responsive breakpoints. Remove all the dataset-management, query-results, and SQL-related styles (they are unused dead code from a previous version of the app).",
+    "Step 7 - Update Layout (Layout.tsx + Layout.css): Enhance the layout with a subtle top navigation bar that includes the WearCast brand name on the left (styled with gradient text) and the UserMenu on the right. Add a subtle gradient border at the bottom of the header. Make the main content area use the full viewport height properly.",
+    "Step 8 - Polish UserMenu (UserMenu.css): Refine the UserMenu dropdown with smoother animations, better shadow depths, and consistent styling with the new theme. Ensure the menu button matches the new header style.",
+    "Step 9 - Add micro-interactions and final polish: Add CSS transitions for page transitions (fade effect), hover states on all interactive elements, focus-visible outlines for accessibility, and ensure all components feel cohesive. Add a subtle CSS-only animated background pattern to the chat page."
+  ],
+  "acceptance_criteria": [
+    "The app builds successfully with `npm run build` (no TypeScript or CSS errors)",
+    "Login/Signup pages have an animated gradient background with a glassmorphism card",
+    "Home page has an animated gradient headline, premium input bar, and pill-shaped example queries",
+    "Chat interface has modern message bubbles (gradient user messages, clean agent messages), smooth streaming animation, and a refined input area",
+    "Layout has a proper header with brand name and user menu",
+    "All interactive elements have smooth hover/focus transitions",
+    "The overall design feels cohesive with consistent colors, spacing, and typography"
+  ],
+  "verification": [
+    "Run `cd /projects/sandbox/wearcast/frontend && npm run build` and confirm it exits with code 0"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}
