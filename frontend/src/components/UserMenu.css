@@ -4,30 +4,29 @@
 }
 
 .user-menu-button {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
   padding: 0.5rem;
-  color: white;
+  color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
-  backdrop-filter: blur(10px);
-  width: 40px;
-  height: 40px;
+  width: 38px;
+  height: 38px;
 }
 
 .user-menu-button:hover {
-  background: rgba(255, 107, 53, 0.2);
-  border-color: rgba(255, 107, 53, 0.4);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.2);
+  background: rgba(255, 107, 53, 0.12);
+  border-color: rgba(255, 107, 53, 0.3);
+  color: var(--text-primary);
+  box-shadow: 0 0 12px rgba(255, 107, 53, 0.15);
 }
 
 .user-menu-button:active {
-  transform: translateY(0);
+  transform: scale(0.95);
 }
 
 .user-menu-button svg {
@@ -38,36 +37,36 @@
   position: absolute;
   top: calc(100% + 0.5rem);
   right: 0;
-  background: var(--bg-darker);
-  border: 1px solid var(--border-dark);
-  border-radius: 12px;
+  background: rgba(17, 24, 39, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-lg);
   padding: 1rem;
   min-width: 280px;
   max-width: 320px;
   box-sizing: border-box;
   box-shadow:
-    0 10px 25px -5px rgba(0, 0, 0, 0.4),
-    0 0 0 1px rgba(255, 107, 53, 0.2),
-    0 0 20px rgba(255, 107, 53, 0.1);
-  backdrop-filter: blur(10px);
-  animation: menu-fade-in 0.2s ease-out;
+    0 16px 48px -8px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+  animation: menuSlideDown 0.2s ease-out;
   overflow: hidden;
 }
 
-@keyframes menu-fade-in {
+@keyframes menuSlideDown {
   from {
     opacity: 0;
-    transform: translateY(-10px);
+    transform: translateY(-8px) scale(0.97);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
 .user-menu-section {
   padding-bottom: 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .user-menu-section:last-child {
@@ -82,7 +81,7 @@
 .user-menu-email {
   font-size: 0.875rem;
   font-weight: 500;
-  color: var(--text-light);
+  color: var(--text-secondary);
   padding: 0.5rem 0;
   word-break: break-word;
 }
@@ -95,16 +94,16 @@
 }
 
 .user-menu-label {
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  color: var(--text-light);
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 .user-menu-reset {
-  background: rgba(239, 68, 68, 0.2);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.25);
   border-radius: 6px;
   padding: 0.25rem 0.5rem;
   color: #fca5a5;
@@ -118,8 +117,8 @@
 }
 
 .user-menu-reset:hover {
-  background: rgba(239, 68, 68, 0.3);
-  border-color: rgba(239, 68, 68, 0.5);
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.4);
   transform: scale(1.1);
 }
 
@@ -134,22 +133,22 @@
 }
 
 .user-menu-userid {
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: white;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
   padding: 0.75rem;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  font-family: 'SF Mono', 'Monaco', 'Consolas', 'Courier New', monospace;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
   word-break: break-all;
 }
 
 .user-menu-edit-button {
-  background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+  background: var(--gradient-primary);
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 0.625rem 1rem;
   font-size: 0.875rem;
   font-weight: 600;
@@ -159,14 +158,13 @@
 }
 
 .user-menu-edit-button:hover {
-  background: linear-gradient(135deg, var(--primary-hover), #D4491F);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
 }
 
- .user-menu-edit-button:active {
+.user-menu-edit-button:active {
   transform: translateY(0);
-} 
+}
 
 .user-menu-edit {
   display: flex;
@@ -179,12 +177,12 @@
 .user-menu-input {
   width: 100%;
   padding: 0.75rem;
-  background: rgba(255, 255, 255, 0.05);
-  border: 2px solid rgba(255, 107, 53, 0.3);
-  border-radius: 8px;
-  color: white;
-  font-size: 0.9375rem;
-  font-family: 'SF Mono', 'Monaco', 'Consolas', 'Courier New', monospace;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 107, 53, 0.25);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
   transition: all 0.2s ease;
   box-sizing: border-box;
   max-width: 100%;
@@ -195,7 +193,7 @@
 .user-menu-input:focus {
   outline: none;
   border-color: var(--primary);
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
   box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
 }
 
@@ -212,10 +210,10 @@
 
 .user-menu-save {
   flex: 1;
-  background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+  background: var(--gradient-primary);
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 0.625rem 1rem;
   font-size: 0.875rem;
   font-weight: 600;
@@ -224,7 +222,6 @@
 }
 
 .user-menu-save:hover {
-  background: linear-gradient(135deg, var(--primary-hover), #D4491F);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
 }
@@ -235,10 +232,10 @@
 
 .user-menu-cancel {
   flex: 1;
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-sm);
   padding: 0.625rem 1rem;
   font-size: 0.875rem;
   font-weight: 600;
@@ -247,8 +244,8 @@
 }
 
 .user-menu-cancel:hover {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .user-menu-cancel:active {
@@ -265,9 +262,9 @@
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: var(--radius-sm);
   padding: 0.625rem 1rem;
   color: #fca5a5;
   font-size: 0.875rem;
@@ -277,10 +274,9 @@
 }
 
 .user-menu-logout:hover {
-  background: rgba(239, 68, 68, 0.25);
-  border-color: rgba(239, 68, 68, 0.5);
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.35);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
 }
 
 .user-menu-logout:active {
