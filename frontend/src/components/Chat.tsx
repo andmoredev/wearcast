@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -34,6 +34,10 @@ function Chat() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const initialQuerySent = useRef(false)
   const wsServiceRef = useRef<WebSocketService | null>(null)
+
+  // Refs to track streaming state for use in event handler closures
+  const streamingTextRef = useRef('')
+  const thinkingTextRef = useRef('')
 
   // Generate a session ID if we don't have one
   useEffect(() => {
@@ -115,7 +119,7 @@ function Chat() {
   }, [sessionId, user])
 
   // Handle WebSocket stream events
-  const handleStreamEvent = (data: StreamEvent) => {
+  const handleStreamEvent = useCallback((data: StreamEvent) => {
     const event = data.event
     if (!event) return
 
@@ -124,17 +128,21 @@ function Chat() {
       const toolName = event.current_tool_use.name
       setCurrentTool(toolName)
       // Move any text accumulated so far into thinking
-      setStreamingText(prev => {
-        if (prev) {
-          setThinkingText(t => t + prev)
-        }
-        return ''
-      })
+      const currentStreaming = streamingTextRef.current
+      if (currentStreaming) {
+        const newThinking = thinkingTextRef.current + currentStreaming
+        thinkingTextRef.current = newThinking
+        setThinkingText(newThinking)
+      }
+      streamingTextRef.current = ''
+      setStreamingText('')
     }
 
     // Handle text streaming
     if (event.data) {
-      setStreamingText(prev => prev + event.data)
+      const newStreaming = streamingTextRef.current + event.data
+      streamingTextRef.current = newStreaming
+      setStreamingText(newStreaming)
     }
 
     // Log lifecycle events
@@ -145,29 +153,34 @@ function Chat() {
     } else if (event.complete) {
       console.log('Agent completed')
     }
-  }
+  }, [])
 
   // Handle completion of streaming
-  const handleComplete = () => {
-    if (streamingText || thinkingText) {
+  const handleComplete = useCallback(() => {
+    const currentStreaming = streamingTextRef.current
+    const currentThinking = thinkingTextRef.current
+
+    if (currentStreaming || currentThinking) {
       const agentMessage: Message = {
         id: Date.now().toString(),
-        text: streamingText,
-        ...(thinkingText ? { thinking: thinkingText } : {}),
+        text: currentStreaming,
+        ...(currentThinking ? { thinking: currentThinking } : {}),
         sender: 'agent',
         timestamp: new Date()
       }
       setMessages(prev => [...prev, agentMessage])
-      setStreamingText('')
-      setThinkingText('')
     }
 
+    streamingTextRef.current = ''
+    thinkingTextRef.current = ''
+    setStreamingText('')
+    setThinkingText('')
     setCurrentTool(null)
     setIsLoading(false)
-  }
+  }, [])
 
   // Handle WebSocket errors
-  const handleError = (data: StreamEvent) => {
+  const handleError = useCallback((data: StreamEvent) => {
     console.error('WebSocket error:', data)
 
     const errorMessage: Message = {
@@ -179,17 +192,19 @@ function Chat() {
     }
 
     setMessages(prev => [...prev, errorMessage])
+    streamingTextRef.current = ''
+    thinkingTextRef.current = ''
     setStreamingText('')
     setThinkingText('')
     setCurrentTool(null)
     setIsLoading(false)
-  }
+  }, [])
 
   // Handle WebSocket close
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     setConnectionStatus('disconnected')
     console.log('WebSocket connection closed')
-  }
+  }, [])
 
   // Send message via WebSocket
   const handleSendMessage = () => {
@@ -213,6 +228,8 @@ function Chat() {
     setMessages(prev => [...prev, userMessage])
     setInputText('')
     setIsLoading(true)
+    streamingTextRef.current = ''
+    thinkingTextRef.current = ''
     setStreamingText('')
     setThinkingText('')
 
@@ -225,16 +242,27 @@ function Chat() {
     const initialQuery = (location.state as any)?.initialQuery
     if (initialQuery && sessionId && !initialQuerySent.current && wsServiceRef.current?.isConnected()) {
       initialQuerySent.current = true
-      setInputText(initialQuery)
 
-      // Wait a bit for connection to stabilize
-      setTimeout(() => {
-        if (wsServiceRef.current?.isConnected()) {
-          handleSendMessage()
-        }
-      }, 500)
+      // Add user message to UI
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        text: initialQuery,
+        sender: 'user',
+        timestamp: new Date()
+      }
+
+      setMessages(prev => [...prev, userMessage])
+      setInputText('')
+      setIsLoading(true)
+      streamingTextRef.current = ''
+      thinkingTextRef.current = ''
+      setStreamingText('')
+      setThinkingText('')
+
+      // Send via WebSocket directly
+      wsServiceRef.current.sendQuery(initialQuery, sessionId, user?.sub)
     }
-  }, [sessionId, location.state, connectionStatus])
+  }, [sessionId, location.state, connectionStatus, user])
 
   // Auto-scroll to bottom
   useEffect(() => {

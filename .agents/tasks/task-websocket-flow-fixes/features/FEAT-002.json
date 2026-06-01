@@ -2,7 +2,7 @@
   "id": "FEAT-002",
   "type": "fix",
   "description": "Fix three WebSocket/chat flow issues: (1) Start WebSocket connection early when entering the chat page instead of waiting for first prompt submission, (2) auto-submit the initial query passed from Home page, (3) fix the hang bug where the app stops accepting follow-up messages after a response completes.",
-  "status": "pending",
+  "status": "in_progress",
   "steps": [
     "STEP 1 - Fix the stale closure bug in Chat.tsx that causes the hang: The event handlers (handleStreamEvent, handleComplete, handleError) are defined in the component body but registered ONCE via wsService.on() during the connectWebSocket call. They capture stale state values (streamingText, thinkingText will always be empty strings from initial render). Convert these to use refs so the handlers always see current state. Specifically: (a) Add refs for streamingText and thinkingText that are kept in sync with their state via useEffect or by updating both ref and state together. (b) In handleComplete, read from refs instead of state variables. (c) Alternatively, refactor so event handlers use functional state updates (e.g., setMessages(prev => ...)) and setStreamingText/setThinkingText with functional updaters to avoid needing current values from closure.",
     "STEP 2 - Keep the WebSocket connection starting at Chat page mount (which it already does via useEffect on sessionId/user), but ensure it starts BEFORE waiting for user input. The current code already does connect on mount - the real issue was that from Home page the user had to press send again. The connection initialization at page load is fine as-is.",
