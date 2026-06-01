@@ -1,0 +1,23 @@
+{
+  "project_type": "React SPA with TypeScript (Vite bundler), AWS backend with WebSocket streaming",
+  "language": "TypeScript",
+  "build_system": "npm + vite, tsc for type checking",
+  "test_framework": "No frontend tests configured (no test runner in package.json)",
+  "build_command": "cd /projects/sandbox/wearcast/frontend && npm run build",
+  "test_command": "cd /projects/sandbox/wearcast/frontend && npx tsc --noEmit",
+  "verification_instructions": "Run tsc --noEmit to verify TypeScript compiles without errors, then run vite build to verify production build succeeds",
+  "snapshot_or_generated_files": null,
+  "setup_instructions": "cd /projects/sandbox/wearcast/frontend && npm install",
+  "environment_constraints": "COMMON_DEPENDENCIES network mode - npm install should work. No .env file present so build may warn about missing env vars but should still succeed for type checking.",
+  "contribution_requirements": "No CONTRIBUTING.md found. Follow existing code patterns.",
+  "key_patterns": "React functional components with hooks; WebSocketService is a class with event emitter pattern (on/off/emit); routing via react-router-dom with location.state for passing data between pages; useAuth() context hook for user info; tsconfig is strict with noUnusedLocals and exactOptionalPropertyTypes enabled",
+  "relevant_files": [
+    "frontend/src/services/websocket.ts",
+    "frontend/src/components/Chat.tsx",
+    "frontend/src/components/Home.tsx",
+    "frontend/src/App.tsx",
+    "frontend/src/contexts/AuthContext.tsx",
+    "frontend/src/services/api.ts"
+  ],
+  "directory_structure": "frontend/src/components/ - React components; frontend/src/services/ - API, auth, websocket services; frontend/src/contexts/ - React contexts (AuthContext); frontend/src/config/ - API config"
+}

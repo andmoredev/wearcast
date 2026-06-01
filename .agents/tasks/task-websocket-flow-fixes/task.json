@@ -1,0 +1,7 @@
+{
+  "task_id": "task-websocket-flow-fixes",
+  "task_description": "Fix WebSocket connection flow: start connection early, auto-submit initial query from Home page, and fix hang bug after response completes",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001", "FEAT-002"],
+  "blocked_reason": null
+}
