@@ -206,21 +206,11 @@ function Chat() {
     console.log('WebSocket connection closed')
   }, [])
 
-  // Send message via WebSocket
-  const handleSendMessage = () => {
-    if (!inputText.trim() || isLoading || !wsServiceRef.current?.isConnected()) {
-      if (!wsServiceRef.current?.isConnected()) {
-        alert('WebSocket not connected. Please refresh the page.')
-      }
-      return
-    }
-
-    const queryText = inputText.trim()
-
-    // Add user message to UI
+  // Shared helper: constructs user message, updates UI state, and sends via WebSocket
+  const sendMessage = (text: string) => {
     const userMessage: Message = {
       id: Date.now().toString(),
-      text: queryText,
+      text,
       sender: 'user',
       timestamp: new Date()
     }
@@ -233,8 +223,19 @@ function Chat() {
     setStreamingText('')
     setThinkingText('')
 
-    // Send via WebSocket
-    wsServiceRef.current.sendQuery(queryText, sessionId!, user?.sub)
+    wsServiceRef.current!.sendQuery(text, sessionId!, user?.sub)
+  }
+
+  // Send message via WebSocket
+  const handleSendMessage = () => {
+    if (!inputText.trim() || isLoading || !wsServiceRef.current?.isConnected()) {
+      if (!wsServiceRef.current?.isConnected()) {
+        alert('WebSocket not connected. Please refresh the page.')
+      }
+      return
+    }
+
+    sendMessage(inputText.trim())
   }
 
   // Auto-send initial query from Home page navigation
@@ -242,25 +243,7 @@ function Chat() {
     const initialQuery = (location.state as any)?.initialQuery
     if (initialQuery && sessionId && !initialQuerySent.current && wsServiceRef.current?.isConnected()) {
       initialQuerySent.current = true
-
-      // Add user message to UI
-      const userMessage: Message = {
-        id: Date.now().toString(),
-        text: initialQuery,
-        sender: 'user',
-        timestamp: new Date()
-      }
-
-      setMessages(prev => [...prev, userMessage])
-      setInputText('')
-      setIsLoading(true)
-      streamingTextRef.current = ''
-      thinkingTextRef.current = ''
-      setStreamingText('')
-      setThinkingText('')
-
-      // Send via WebSocket directly
-      wsServiceRef.current.sendQuery(initialQuery, sessionId, user?.sub)
+      sendMessage(initialQuery)
     }
   }, [sessionId, location.state, connectionStatus, user])
 
