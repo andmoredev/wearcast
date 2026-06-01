@@ -93,14 +93,14 @@ function Chat() {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && !wsServiceRef.current?.isConnected()) {
-        console.log('Tab active — reconnecting WebSocket')
+        console.log('Tab active - reconnecting WebSocket')
         connectWebSocket()
       }
     }
 
     const handleOnline = () => {
       if (!wsServiceRef.current?.isConnected()) {
-        console.log('Network restored — reconnecting WebSocket')
+        console.log('Network restored - reconnecting WebSocket')
         connectWebSocket()
       }
     }
@@ -119,7 +119,7 @@ function Chat() {
     const event = data.event
     if (!event) return
 
-    // Handle tool usage — move accumulated text to thinking phase
+    // Handle tool usage - move accumulated text to thinking phase
     if (event.current_tool_use?.name) {
       const toolName = event.current_tool_use.name
       setCurrentTool(toolName)
@@ -139,11 +139,11 @@ function Chat() {
 
     // Log lifecycle events
     if (event.init_event_loop) {
-      console.log('🔄 Agent initialized')
+      console.log('Agent initialized')
     } else if (event.start_event_loop) {
-      console.log('▶️ Agent started processing')
+      console.log('Agent started processing')
     } else if (event.complete) {
-      console.log('✅ Agent completed')
+      console.log('Agent completed')
     }
   }
 
@@ -168,7 +168,7 @@ function Chat() {
 
   // Handle WebSocket errors
   const handleError = (data: StreamEvent) => {
-    console.error('❌ WebSocket error:', data)
+    console.error('WebSocket error:', data)
 
     const errorMessage: Message = {
       id: Date.now().toString(),
@@ -188,7 +188,7 @@ function Chat() {
   // Handle WebSocket close
   const handleClose = () => {
     setConnectionStatus('disconnected')
-    console.log('🔌 WebSocket connection closed')
+    console.log('WebSocket connection closed')
   }
 
   // Send message via WebSocket
@@ -257,26 +257,23 @@ function Chat() {
             onClick={() => navigate('/')}
             title="Back to Home"
           >
-            ← Home
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5"/>
+              <path d="m12 19-7-7 7-7"/>
+            </svg>
           </button>
           <h2>WearCast</h2>
-        </div>
-        {sessionId && (
-          <div className="session-info">
-            <div className="session-badge">
-              <span className="session-label">Session:</span>
-              <span className="session-id">{sessionId}</span>
-            </div>
+          {sessionId && (
             <div className={`connection-status ${connectionStatus}`}>
               <span className="status-dot"></span>
               <span className="status-text">
-                {connectionStatus === 'connected' && '🟢 Connected'}
-                {connectionStatus === 'connecting' && '🟡 Connecting...'}
-                {connectionStatus === 'disconnected' && '🔴 Disconnected'}
+                {connectionStatus === 'connected' && 'Connected'}
+                {connectionStatus === 'connecting' && 'Connecting'}
+                {connectionStatus === 'disconnected' && 'Offline'}
               </span>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <div className="chat-messages">
@@ -330,7 +327,8 @@ function Chat() {
               )}
               {currentTool && !streamingText && (
                 <div className="tool-indicator">
-                  🔧 Using: <strong>{currentTool}</strong>
+                  <span className="tool-icon">&#128295;</span>
+                  <span>Using <strong>{currentTool}</strong></span>
                 </div>
               )}
               {streamingText && (
@@ -353,11 +351,11 @@ function Chat() {
         )}
 
         {/* Loading indicator */}
-        {isLoading && !streamingText && (
+        {isLoading && !streamingText && !thinkingText && (
           <div className="message agent loading">
             <div className="message-content">
               <div className="loading-indicator">
-                <span>Thinking...</span>
+                <span>Thinking</span>
                 <div className="loading-dots">
                   <div className="loading-dot"></div>
                   <div className="loading-dot"></div>
@@ -378,7 +376,7 @@ function Chat() {
           onKeyDown={handleKeyDown}
           placeholder={
             connectionStatus === 'connected'
-              ? 'Ask about a city — e.g. What about Chicago?'
+              ? 'Ask about a city - e.g. What about Chicago?'
               : 'Connecting...'
           }
           rows={3}
@@ -388,7 +386,14 @@ function Chat() {
           onClick={handleSendMessage}
           disabled={isLoading || !inputText.trim() || connectionStatus !== 'connected'}
         >
-          {isLoading ? 'Sending...' : 'Send'}
+          {isLoading ? (
+            <div className="button-spinner"></div>
+          ) : (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="m22 2-7 20-4-9-9-4z"/>
+              <path d="M22 2 11 13"/>
+            </svg>
+          )}
         </button>
       </div>
     </div>
