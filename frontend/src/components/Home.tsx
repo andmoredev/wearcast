@@ -1,17 +1,25 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useWebSocket } from '../contexts/WebSocketContext'
 
 function Home() {
   const [query, setQuery] = useState('')
   const navigate = useNavigate()
+  const { sessionId, setSessionId } = useWebSocket()
+
+  // Generate a session ID on mount so the WebSocket can connect early
+  useEffect(() => {
+    if (!sessionId) {
+      setSessionId(crypto.randomUUID())
+    }
+  }, [sessionId, setSessionId])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
     if (!query.trim()) return
 
-    // Generate a session ID and navigate to chat
-    const sessionId = crypto.randomUUID()
+    // Navigate to chat with the existing session (WebSocket already connecting/connected)
     navigate(`/chat/${sessionId}`, { state: { initialQuery: query.trim() } })
     setQuery('')
   }

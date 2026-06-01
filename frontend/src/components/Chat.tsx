@@ -3,8 +3,8 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeSanitize from 'rehype-sanitize'
-import { WebSocketService, StreamEvent } from '../services/websocket'
-import { useAuth } from '../contexts/AuthContext'
+import { StreamEvent } from '../services/websocket'
+import { useWebSocket } from '../contexts/WebSocketContext'
 
 interface Message {
   id: string
@@ -20,103 +20,34 @@ function Chat() {
   const { sessionId: urlSessionId } = useParams<{ sessionId?: string }>()
   const navigate = useNavigate()
   const location = useLocation()
-  const { user } = useAuth()
+  const { sessionId, setSessionId, connectionStatus, sendQuery, isConnected, on, off } = useWebSocket()
 
   const [messages, setMessages] = useState<Message[]>([])
   const [inputText, setInputText] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [sessionId, setSessionId] = useState<string | null>(urlSessionId || null)
   const [streamingText, setStreamingText] = useState('')
   const [thinkingText, setThinkingText] = useState('')
   const [currentTool, setCurrentTool] = useState<string | null>(null)
-  const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected')
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const initialQuerySent = useRef(false)
-  const wsServiceRef = useRef<WebSocketService | null>(null)
 
   // Refs to track streaming state for use in event handler closures
   const streamingTextRef = useRef('')
   const thinkingTextRef = useRef('')
 
-  // Generate a session ID if we don't have one
+  // Ensure the context has the session ID from the URL (or generate one)
   useEffect(() => {
-    if (!sessionId) {
+    if (urlSessionId && urlSessionId !== sessionId) {
+      setSessionId(urlSessionId)
+    } else if (!sessionId) {
       const newSessionId = crypto.randomUUID()
       setSessionId(newSessionId)
       navigate(`/chat/${newSessionId}`, { replace: true })
+    } else if (sessionId && !urlSessionId) {
+      navigate(`/chat/${sessionId}`, { replace: true })
     }
-  }, [sessionId, navigate])
-
-  // Connect (or reconnect) the WebSocket, fetching a fresh presigned URL
-  const connectWebSocket = async () => {
-    if (!sessionId || !user) return
-
-    try {
-      setConnectionStatus('connecting')
-
-      // Tear down any existing connection
-      if (wsServiceRef.current) {
-        wsServiceRef.current.disconnect()
-      }
-
-      const wsService = new WebSocketService()
-      wsServiceRef.current = wsService
-
-      wsService.on('stream_event', handleStreamEvent)
-      wsService.on('complete', handleComplete)
-      wsService.on('error', handleError)
-      wsService.on('close', handleClose)
-
-      await wsService.connect(sessionId)
-
-      setConnectionStatus('connected')
-      console.log('WebSocket connection ready')
-    } catch (error) {
-      console.error('Failed to initialize WebSocket:', error)
-      setConnectionStatus('disconnected')
-    }
-  }
-
-  // Initialize WebSocket connection
-  useEffect(() => {
-    if (!sessionId || !user) return
-
-    connectWebSocket()
-
-    // Cleanup on unmount
-    return () => {
-      if (wsServiceRef.current) {
-        wsServiceRef.current.disconnect()
-        wsServiceRef.current = null
-      }
-    }
-  }, [sessionId, user])
-
-  // Auto-reconnect when tab becomes visible or network is restored
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && !wsServiceRef.current?.isConnected()) {
-        console.log('Tab active - reconnecting WebSocket')
-        connectWebSocket()
-      }
-    }
-
-    const handleOnline = () => {
-      if (!wsServiceRef.current?.isConnected()) {
-        console.log('Network restored - reconnecting WebSocket')
-        connectWebSocket()
-      }
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    window.addEventListener('online', handleOnline)
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-      window.removeEventListener('online', handleOnline)
-    }
-  }, [sessionId, user])
+  }, [urlSessionId, sessionId, setSessionId, navigate])
 
   // Handle WebSocket stream events
   const handleStreamEvent = useCallback((data: StreamEvent) => {
@@ -200,11 +131,18 @@ function Chat() {
     setIsLoading(false)
   }, [])
 
-  // Handle WebSocket close
-  const handleClose = useCallback(() => {
-    setConnectionStatus('disconnected')
-    console.log('WebSocket connection closed')
-  }, [])
+  // Register/unregister event listeners on the WebSocket context
+  useEffect(() => {
+    on('stream_event', handleStreamEvent)
+    on('complete', handleComplete)
+    on('error', handleError)
+
+    return () => {
+      off('stream_event', handleStreamEvent)
+      off('complete', handleComplete)
+      off('error', handleError)
+    }
+  }, [on, off, handleStreamEvent, handleComplete, handleError])
 
   // Shared helper: constructs user message, updates UI state, and sends via WebSocket
   const sendMessage = (text: string) => {
@@ -223,13 +161,13 @@ function Chat() {
     setStreamingText('')
     setThinkingText('')
 
-    wsServiceRef.current!.sendQuery(text, sessionId!, user?.sub)
+    sendQuery(text)
   }
 
   // Send message via WebSocket
   const handleSendMessage = () => {
-    if (!inputText.trim() || isLoading || !wsServiceRef.current?.isConnected()) {
-      if (!wsServiceRef.current?.isConnected()) {
+    if (!inputText.trim() || isLoading || !isConnected) {
+      if (!isConnected) {
         alert('WebSocket not connected. Please refresh the page.')
       }
       return
@@ -241,11 +179,11 @@ function Chat() {
   // Auto-send initial query from Home page navigation
   useEffect(() => {
     const initialQuery = (location.state as any)?.initialQuery
-    if (initialQuery && sessionId && !initialQuerySent.current && wsServiceRef.current?.isConnected()) {
+    if (initialQuery && sessionId && !initialQuerySent.current && isConnected) {
       initialQuerySent.current = true
       sendMessage(initialQuery)
     }
-  }, [sessionId, location.state, connectionStatus, user])
+  }, [sessionId, location.state, connectionStatus, isConnected]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-scroll to bottom
   useEffect(() => {
