@@ -1,0 +1,26 @@
+{
+  "id": "FEAT-002",
+  "type": "fix",
+  "description": "Fix three WebSocket/chat flow issues: (1) Start WebSocket connection early when entering the chat page instead of waiting for first prompt submission, (2) auto-submit the initial query passed from Home page, (3) fix the hang bug where the app stops accepting follow-up messages after a response completes.",
+  "status": "completed",
+  "steps": [
+    "STEP 1 - Fix the stale closure bug in Chat.tsx that causes the hang: The event handlers (handleStreamEvent, handleComplete, handleError) are defined in the component body but registered ONCE via wsService.on() during the connectWebSocket call. They capture stale state values (streamingText, thinkingText will always be empty strings from initial render). Convert these to use refs so the handlers always see current state. Specifically: (a) Add refs for streamingText and thinkingText that are kept in sync with their state via useEffect or by updating both ref and state together. (b) In handleComplete, read from refs instead of state variables. (c) Alternatively, refactor so event handlers use functional state updates (e.g., setMessages(prev => ...)) and setStreamingText/setThinkingText with functional updaters to avoid needing current values from closure.",
+    "STEP 2 - Keep the WebSocket connection starting at Chat page mount (which it already does via useEffect on sessionId/user), but ensure it starts BEFORE waiting for user input. The current code already does connect on mount - the real issue was that from Home page the user had to press send again. The connection initialization at page load is fine as-is.",
+    "STEP 3 - Fix auto-submit of initial query from Home page: The current useEffect that handles initialQuery has multiple bugs: (a) It sets inputText but then immediately tries to call handleSendMessage which reads the OLD inputText (empty string) from state. (b) The useEffect closure captures a stale handleSendMessage. Fix this by: Instead of setting inputText and calling handleSendMessage, directly invoke the send logic: add the user message to messages, call wsServiceRef.current.sendQuery() directly with the initialQuery text, and set isLoading=true. Use a separate useEffect that watches connectionStatus - when it transitions to 'connected' AND location.state has initialQuery AND initialQuerySent.current is false, execute the send. This avoids the race condition with the WebSocket not being ready.",
+    "STEP 4 - Ensure that after handleComplete runs, isLoading is set to false unconditionally (it already is, but verify the stale closure fix makes it actually execute properly), and the WebSocket connection remains open for follow-up messages. The WebSocket should NOT be disconnected after a single response."
+  ],
+  "acceptance_criteria": [
+    "TypeScript compiles without errors (npx tsc --noEmit passes)",
+    "The Chat component connects WebSocket on mount when sessionId and user are available",
+    "When navigating from Home with an initialQuery in location.state, the query is automatically sent once WebSocket is connected - without requiring the user to press send",
+    "After receiving a complete response from the agent, isLoading is set to false and the input field becomes enabled for follow-up messages",
+    "The WebSocket connection remains open after receiving a response, allowing follow-up queries",
+    "Event handlers (handleStreamEvent, handleComplete, handleError) always see current state values, not stale closure captures"
+  ],
+  "verification": [
+    "Run `cd /projects/sandbox/wearcast/frontend && npx tsc --noEmit` and confirm it passes",
+    "Run `cd /projects/sandbox/wearcast/frontend && npm run build` and confirm production build succeeds"
+  ],
+  "blocked_reason": null,
+  "findings": "All three bugs fixed successfully. tsc --noEmit passes, vite build succeeds. Used useRef + useCallback pattern to fix stale closures. Auto-submit rewritten to call sendQuery directly instead of through handleSendMessage. WebSocket connection already starts at mount time (no change needed for Bug 3)."
+}
