@@ -52,9 +52,38 @@ jobs:
           * Backend Stack: \`$BACKEND_STACK_NAME\`
           EOF
 
+  package-agent:
+    name: Package & Upload Agent
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      s3-key: ${{ steps.package.outputs.s3-key }}
+      package-size: ${{ steps.package.outputs.package-size }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-region: us-east-1
+          role-to-assume: ${{ secrets.PIPELINE_EXECUTION_ROLE }}
+
+      - name: Package Agent
+        id: package
+        uses: ./.github/actions/package-agent
+        with:
+          agent-name: "agent"
+          agent-path: "backend/agents/agent"
+          artifacts-bucket: ${{ secrets.ARTIFACTS_BUCKET_NAME }}
+          python-version: '3.13'
+          architecture: 'aarch64-manylinux2014'
+
   deploy-backend:
     runs-on: ubuntu-latest
-    needs: [prepare-deployment]
+    needs: [package-agent, prepare-deployment]
     outputs:
       api-url: ${{ steps.deploy.outputs.api-url }}
 
@@ -85,6 +114,7 @@ jobs:
           ENV_HASH: ${{ needs.prepare-deployment.outputs.env_hash }}
           ENV_NAME: ${{ needs.prepare-deployment.outputs.env_name }}
           ARTIFACTS_BUCKET_NAME: ${{ secrets.ARTIFACTS_BUCKET_NAME }}
+          AGENT_DIRECT_DEPLOY_KEY: ${{ needs.package-agent.outputs.s3-key }}
           AWS_REGION: ${{ env.AWS_REGION }}
         run: |
           envsubst < samconfig.yaml.template > samconfig.yaml

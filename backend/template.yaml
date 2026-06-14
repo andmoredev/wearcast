@@ -7,6 +7,11 @@ Parameters:
     Type: String
     Description: S3 bucket name for deployment artifacts (used for direct code deployment)
 
+  AgentDirectDeployKey:
+    Type: String
+    Description: S3 key for agent deployment ZIP file
+    Default: "agents/agent.zip"
+
   EnvironmentHash:
     Type: String
     Description: A hash of the current environment
@@ -106,7 +111,7 @@ Resources:
           Code:
             S3:
               Bucket: !Ref ArtifactsBucketName
-              Prefix: "agents/agent.zip"
+              Prefix: !Ref AgentDirectDeployKey
           EntryPoint:
             - agent.py
           Runtime: PYTHON_3_13

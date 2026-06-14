@@ -1,0 +1,186 @@
+name: 'Package Agent for Direct Deploy'
+description: 'Packages an AgentCore agent with dependencies and uploads to S3'
+author: 'AgentCore Chatbot Team'
+
+inputs:
+  agent-name:
+    description: 'Name of the agent'
+    required: true
+  agent-path:
+    description: 'Path to agent directory relative to repository root (e.g., backend/agents/rhyme-agent)'
+    required: true
+  artifacts-bucket:
+    description: 'S3 bucket name for artifact storage'
+    required: true
+  python-version:
+    description: 'Python version for dependency installation'
+    required: false
+    default: '3.13'
+  architecture:
+    description: 'Target architecture for dependencies (e.g., aarch64-manylinux2014, x86_64-manylinux2014)'
+    required: false
+    default: 'aarch64-manylinux2014'
+
+outputs:
+  s3-key:
+    description: 'S3 key where the packaged agent was uploaded'
+    value: ${{ steps.upload.outputs.s3_key }}
+  package-size:
+    description: 'Size of the created package'
+    value: ${{ steps.package.outputs.package_size }}
+  upload-url:
+    description: 'Full S3 URL of the uploaded package'
+    value: ${{ steps.upload.outputs.upload_url }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Validate inputs
+      shell: bash
+      run: |
+        echo "::group::Validating inputs"
+
+        if [ -z "${{ inputs.agent-name }}" ]; then
+          echo "::error::agent-name input is required"
+          exit 1
+        fi
+
+        if [ -z "${{ inputs.agent-path }}" ]; then
+          echo "::error::agent-path input is required"
+          exit 1
+        fi
+
+        if [ ! -d "${{ inputs.agent-path }}" ]; then
+          echo "::error::Agent directory not found: ${{ inputs.agent-path }}"
+          exit 1
+        fi
+
+        if [ ! -f "${{ inputs.agent-path }}/agent.py" ]; then
+          echo "::error::agent.py not found in ${{ inputs.agent-path }}"
+          exit 1
+        fi
+
+        if [ ! -f "${{ inputs.agent-path }}/requirements.txt" ]; then
+          echo "::error::requirements.txt not found in ${{ inputs.agent-path }}"
+          exit 1
+        fi
+
+        echo "✓ All required files found for agent: ${{ inputs.agent-name }}"
+        echo "::endgroup::"
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: true
+
+    - name: Package agent
+      id: package
+      shell: bash
+      working-directory: ${{ inputs.agent-path }}
+      run: |
+        echo "::group::Packaging ${{ inputs.agent-name }}"
+
+        DEPLOYMENT_DIR="deployment_package"
+        ZIP_FILE="/tmp/${{ inputs.agent-name }}.zip"
+
+        echo "Packaging ${{ inputs.agent-name }} for direct code deployment..."
+        echo "Target architecture: ${{ inputs.architecture }}"
+        echo "Python version: ${{ inputs.python-version }}"
+
+        # Clean up previous builds
+        echo "Cleaning up previous builds..."
+        rm -rf "$DEPLOYMENT_DIR"
+        rm -f "$ZIP_FILE"
+
+        # Create deployment directory
+        mkdir -p "$DEPLOYMENT_DIR"
+
+        # Install dependencies using uv for specified architecture
+        echo "Installing dependencies for ${{ inputs.architecture }} using uv..."
+        if ! uv pip install \
+          --python-platform ${{ inputs.architecture }} \
+          --python-version ${{ inputs.python-version }} \
+          --target="$DEPLOYMENT_DIR" \
+          --only-binary=:all: \
+          -r requirements.txt; then
+          echo "::error::Failed to install dependencies for ${{ inputs.agent-name }}"
+          exit 1
+        fi
+
+        # Create ZIP file with installed libraries
+        echo "Creating ZIP file with dependencies..."
+        cd "$DEPLOYMENT_DIR"
+        if ! zip -r "$ZIP_FILE" .; then
+          echo "::error::Failed to create ZIP file for ${{ inputs.agent-name }}"
+          exit 1
+        fi
+
+        # Add agent files to the ZIP
+        echo "Adding agent files to ZIP..."
+        cd ..
+
+        # Add agent.py
+        if ! zip "$ZIP_FILE" agent.py; then
+          echo "::error::Failed to add agent.py to ZIP for ${{ inputs.agent-name }}"
+          exit 1
+        fi
+
+        # Add knowledge-base directory if it exists
+        if [ -d "knowledge-base" ]; then
+          echo "Adding knowledge-base directory to ZIP..."
+          if ! zip -r "$ZIP_FILE" knowledge-base/; then
+            echo "::error::Failed to add knowledge-base to ZIP for ${{ inputs.agent-name }}"
+            exit 1
+          fi
+        fi
+
+        # Set file permissions (AWS requirement)
+        chmod 644 agent.py
+        if [ -d "knowledge-base" ]; then
+          find knowledge-base -type f -exec chmod 644 {} \;
+        fi
+
+        # Calculate package size
+        PACKAGE_SIZE=$(du -h "$ZIP_FILE" | cut -f1)
+
+        echo "ZIP_FILE=$ZIP_FILE" >> $GITHUB_ENV
+        echo "package_size=$PACKAGE_SIZE" >> $GITHUB_OUTPUT
+
+        echo "✓ Package created: $PACKAGE_SIZE"
+        echo "::endgroup::"
+
+    - name: Upload to S3
+      id: upload
+      shell: bash
+      run: |
+        echo "::group::Uploading ${{ inputs.agent-name }} to S3"
+
+        BUCKET_NAME="${{ inputs.artifacts-bucket }}"
+        TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+        S3_KEY="agents/${{ inputs.agent-name }}-${TIMESTAMP}.zip"
+        UPLOAD_URL="s3://$BUCKET_NAME/$S3_KEY"
+
+        echo "Uploading to $UPLOAD_URL..."
+
+        if ! aws s3 cp "$ZIP_FILE" "$UPLOAD_URL"; then
+          echo "::error::Failed to upload ${{ inputs.agent-name }} to S3"
+          exit 1
+        fi
+
+        echo "s3_key=$S3_KEY" >> $GITHUB_OUTPUT
+        echo "upload_url=$UPLOAD_URL" >> $GITHUB_OUTPUT
+
+        echo "✓ Uploaded to $UPLOAD_URL"
+        echo "::endgroup::"
+
+    - name: Add to workflow summary
+      shell: bash
+      run: |
+        echo "### 📦 Agent Package: ${{ inputs.agent-name }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **Package Size:** ${{ steps.package.outputs.package_size }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **S3 Key:** \`${{ steps.upload.outputs.s3_key }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Upload URL:** \`${{ steps.upload.outputs.upload_url }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Architecture:** ${{ inputs.architecture }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Python Version:** ${{ inputs.python-version }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
