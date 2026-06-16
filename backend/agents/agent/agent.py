@@ -5,10 +5,11 @@ A weather-based clothing advisor with:
 - Real-time streaming via WebSocket
 - Memory persistence across conversations
 - JWT-based user authentication
-- get_weather tool (Open-Meteo, no API key required)
+- get_weather tool via AgentCore Gateway (Lambda-backed)
 
 Required Environment Variables:
     - AGENTCORE_MEMORY_ID: AgentCore Memory resource ID for conversation persistence
+    - AGENTCORE_GATEWAY_URL: AgentCore Gateway MCP endpoint URL for weather tools
 
 Optional Environment Variables:
     - AWS_REGION: AWS region (default: us-east-1)
@@ -21,6 +22,8 @@ import urllib.request
 import urllib.parse
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from strands import Agent, tool
+from strands.tools.mcp import MCPClient
+from mcp.client.streamable_http import streamablehttp_client
 from strands_tools import use_llm, memory
 from strands.models import BedrockModel
 from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig
@@ -33,11 +36,15 @@ app = BedrockAgentCoreApp()
 # ============================================================================
 
 AGENTCORE_MEMORY_ID = os.environ.get("AGENTCORE_MEMORY_ID")
+AGENTCORE_GATEWAY_URL = os.environ.get("AGENTCORE_GATEWAY_URL")
 AWS_REGION = os.environ.get("AWS_REGION", os.environ.get("AWS_DEFAULT_REGION", "us-east-1"))
 BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "us.amazon.nova-lite-v1:0")
 
 if not AGENTCORE_MEMORY_ID:
     raise ValueError("AGENTCORE_MEMORY_ID environment variable is required but not set")
+
+if not AGENTCORE_GATEWAY_URL:
+    raise ValueError("AGENTCORE_GATEWAY_URL environment variable is required but not set")
 
 # ============================================================================
 # Weather tool
@@ -127,6 +134,29 @@ def get_weather(city: str) -> dict:
         "condition": condition,
     }
 
+
+# ============================================================================
+# AgentCore Gateway MCP Client
+# ============================================================================
+
+def create_gateway_mcp_client() -> MCPClient:
+    """Create an MCP client connected to AgentCore Gateway for weather tools.
+
+    The Gateway uses AWS IAM authentication. When running inside AgentCore Runtime,
+    the runtime's IAM role credentials are automatically available and used by the
+    streamablehttp_client for SigV4 signing.
+
+    Returns:
+        MCPClient configured to connect to the AgentCore Gateway MCP endpoint.
+    """
+    return MCPClient(
+        lambda: streamablehttp_client(url=AGENTCORE_GATEWAY_URL),
+        prefix="gateway",
+    )
+
+
+# Create the gateway client at module level so tools are discovered once
+gateway_mcp_client = create_gateway_mcp_client()
 
 # ============================================================================
 
@@ -225,7 +255,7 @@ async def websocket_handler(websocket, context):
                 agent = Agent(
                     agent_id="wearcast",
                     model=BedrockModel(model_id=BEDROCK_MODEL_ID),
-                    tools=[get_weather, memory, use_llm],
+                    tools=[gateway_mcp_client, memory, use_llm],
                     system_prompt=SYSTEM_PROMPT,
                     session_manager=session_manager,
                 )
@@ -335,7 +365,7 @@ def invoke(payload):
         agent = Agent(
             agent_id="wearcast",
             model=BedrockModel(model_id=BEDROCK_MODEL_ID),
-            tools=[get_weather, memory, use_llm],
+            tools=[gateway_mcp_client, memory, use_llm],
             system_prompt=SYSTEM_PROMPT,
             session_manager=session_manager,
         )
