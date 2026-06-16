@@ -359,8 +359,6 @@ Resources:
       Description: Lambda function implementing the get_weather tool for AgentCore Gateway
       Runtime: python3.13
       Timeout: 30
-      Architectures:
-        - arm64
       Policies:
         - Statement:
             - Effect: Allow
