@@ -220,7 +220,7 @@ Resources:
       RoleArn: !GetAtt AgentCoreRole.Arn
       EnvironmentVariables:
         AGENTCORE_MEMORY_ID: !GetAtt AgentCoreShortTermMemory.MemoryId
-        AGENTCORE_GATEWAY_URL: !Sub "https://gateway.bedrock-agentcore.${AWS::Region}.amazonaws.com/gateway/${AgentCoreGateway.GatewayId}/mcp"
+        AGENTCORE_GATEWAY_URL: !GetAtt AgentCoreGateway.GatewayUrl
 
   AgentCoreRole:
     Type: AWS::IAM::Role
@@ -377,15 +377,40 @@ Resources:
       Principal: bedrock-agentcore.amazonaws.com
       SourceAccount: !Ref AWS::AccountId
 
+  # IAM Role for the AgentCore Gateway to invoke Lambda targets
+  AgentCoreGatewayRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: bedrock-agentcore.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                "aws:SourceAccount": !Ref AWS::AccountId
+      Policies:
+        - PolicyName: GatewayLambdaInvokePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt GetWeatherToolFunction.Arn
+
   AgentCoreGateway:
     Type: AWS::BedrockAgentCore::Gateway
     Properties:
       Name: !Sub WearCastGateway${EnvironmentHash}
       Description: AgentCore Gateway providing weather tools for the WearCast agent
+      RoleArn: !GetAtt AgentCoreGatewayRole.Arn
       ProtocolType: MCP
       ProtocolConfiguration:
         Mcp:
-          Instructions: "Use this gateway to access weather tools for the WearCast clothing advisor agent."
           SupportedVersions:
             - "2025-03-26"
       AuthorizerType: AWS_IAM
@@ -393,7 +418,7 @@ Resources:
   AgentCoreGatewayWeatherTarget:
     Type: AWS::BedrockAgentCore::GatewayTarget
     Properties:
-      GatewayIdentifier: !GetAtt AgentCoreGateway.GatewayId
+      GatewayIdentifier: !GetAtt AgentCoreGateway.GatewayIdentifier
       Name: weather-tools
       Description: Weather tool target backed by Lambda function
       TargetConfiguration:
@@ -402,17 +427,18 @@ Resources:
             LambdaArn: !GetAtt GetWeatherToolFunction.Arn
             ToolSchema:
               InlinePayload:
-                - Name: get_weather
-                  Description: "Get current weather conditions for a city to inform clothing recommendations. Returns temperature, feels-like temperature, precipitation, wind speed, and condition description. All temperatures in Fahrenheit, wind in km/h, precipitation in mm."
-                  InputSchema:
-                    Type: object
-                    Description: "Input schema for the get_weather tool"
-                    Properties:
+                - name: get_weather
+                  description: "Get current weather conditions for a city to inform clothing recommendations. Returns temperature, feels-like temperature, precipitation, wind speed, and condition description. All temperatures in Fahrenheit, wind in km/h, precipitation in mm."
+                  inputSchema:
+                    type: object
+                    properties:
                       city:
-                        Type: string
-                        Description: "City name to look up (e.g. 'Indianapolis', 'Chicago')"
-                    Required:
+                        type: string
+                        description: "City name to look up (e.g. 'Indianapolis', 'Chicago')"
+                    required:
                       - city
+      CredentialProviderConfigurations:
+        - CredentialProviderType: GATEWAY_IAM_ROLE
 
   # ============================================================================
   # Cognito User Pool for user authentication
@@ -512,8 +538,8 @@ Outputs:
 
   AgentCoreGatewayId:
     Description: "AgentCore Gateway ID for the weather tools gateway"
-    Value: !GetAtt AgentCoreGateway.GatewayId
+    Value: !GetAtt AgentCoreGateway.GatewayIdentifier
 
   AgentCoreGatewayUrl:
     Description: "AgentCore Gateway MCP endpoint URL"
-    Value: !Sub "https://gateway.bedrock-agentcore.${AWS::Region}.amazonaws.com/gateway/${AgentCoreGateway.GatewayId}/mcp"
+    Value: !GetAtt AgentCoreGateway.GatewayUrl
