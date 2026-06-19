@@ -220,6 +220,7 @@ Resources:
       RoleArn: !GetAtt AgentCoreRole.Arn
       EnvironmentVariables:
         AGENTCORE_MEMORY_ID: !GetAtt AgentCoreShortTermMemory.MemoryId
+        AGENTCORE_GATEWAY_URL: !GetAtt AgentCoreGateway.GatewayUrl
 
   AgentCoreRole:
     Type: AWS::IAM::Role
@@ -282,6 +283,12 @@ Resources:
                   - bedrock-agentcore:InvokeAgentRuntime
                 Resource:
                   - !Sub "arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:runtime/*"
+              - Sid: BedrockAgentCoreGateway
+                Effect: Allow
+                Action:
+                  - bedrock-agentcore:InvokeGateway
+                Resource:
+                  - !Sub "arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:gateway/*"
               - Sid: BedrockAgentCoreMemoryCreateMemory
                 Effect: Allow
                 Action:
@@ -340,6 +347,100 @@ Resources:
                   - "arn:aws:bedrock:*::foundation-model/*"
                   - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:*"
 
+  # ============================================================================
+  # AgentCore Gateway - Weather Tool via Lambda
+  # ============================================================================
+
+  GetWeatherToolFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/
+      Handler: get-weather-tool.handler
+      Description: Lambda function implementing the get_weather tool for AgentCore Gateway
+      Runtime: python3.13
+      Timeout: 30
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
+
+  # Permission for AgentCore Gateway to invoke the weather tool Lambda
+  GetWeatherToolFunctionGatewayPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt GetWeatherToolFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: bedrock-agentcore.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+
+  # IAM Role for the AgentCore Gateway to invoke Lambda targets
+  AgentCoreGatewayRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: bedrock-agentcore.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                "aws:SourceAccount": !Ref AWS::AccountId
+      Policies:
+        - PolicyName: GatewayLambdaInvokePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt GetWeatherToolFunction.Arn
+
+  AgentCoreGateway:
+    Type: AWS::BedrockAgentCore::Gateway
+    Properties:
+      Name: !Sub WearCastGateway${EnvironmentHash}
+      Description: AgentCore Gateway providing weather tools for the WearCast agent
+      RoleArn: !GetAtt AgentCoreGatewayRole.Arn
+      ProtocolType: MCP
+      ProtocolConfiguration:
+        Mcp:
+          SupportedVersions:
+            - "2025-03-26"
+      AuthorizerType: AWS_IAM
+
+  AgentCoreGatewayWeatherTarget:
+    Type: AWS::BedrockAgentCore::GatewayTarget
+    Properties:
+      GatewayIdentifier: !GetAtt AgentCoreGateway.GatewayIdentifier
+      Name: weather-tools
+      Description: Weather tool target backed by Lambda function
+      TargetConfiguration:
+        Mcp:
+          Lambda:
+            LambdaArn: !GetAtt GetWeatherToolFunction.Arn
+            ToolSchema:
+              InlinePayload:
+                - name: get_weather
+                  description: "Get current weather conditions for a city to inform clothing recommendations. Returns temperature, feels-like temperature, precipitation, wind speed, and condition description. All temperatures in Fahrenheit, wind in km/h, precipitation in mm."
+                  inputSchema:
+                    type: object
+                    properties:
+                      city:
+                        type: string
+                        description: "City name to look up (e.g. 'Indianapolis', 'Chicago')"
+                    required:
+                      - city
+      CredentialProviderConfigurations:
+        - CredentialProviderType: GATEWAY_IAM_ROLE
+
+  # ============================================================================
   # Cognito User Pool for user authentication
   CognitoUserPool:
     Type: AWS::Cognito::UserPool
@@ -434,3 +535,11 @@ Outputs:
     Value: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}/.well-known/openid-configuration"
     Export:
       Name: !Sub "${AWS::StackName}-CognitoDiscoveryUrl"
+
+  AgentCoreGatewayId:
+    Description: "AgentCore Gateway ID for the weather tools gateway"
+    Value: !GetAtt AgentCoreGateway.GatewayIdentifier
+
+  AgentCoreGatewayUrl:
+    Description: "AgentCore Gateway MCP endpoint URL"
+    Value: !GetAtt AgentCoreGateway.GatewayUrl
