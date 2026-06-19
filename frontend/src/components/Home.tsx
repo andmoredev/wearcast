@@ -75,15 +75,15 @@ function Home() {
           </button>
           <button
             className="example-query"
-            onClick={() => setQuery("What's the weather like in Chicago and how should I dress?")}
+            onClick={() => setQuery("What should I pack for New York City this Saturday?")}
           >
-            &#127783; Chicago outfit
+            &#128197; NYC this Saturday
           </button>
           <button
             className="example-query"
-            onClick={() => setQuery("I'm heading to Seattle - do I need a rain jacket?")}
+            onClick={() => setQuery("I'm heading to Seattle next week - do I need a rain jacket?")}
           >
-            &#127746; Seattle rain check
+            &#127746; Seattle next week
           </button>
         </div>
       </div>

@@ -21,10 +21,12 @@ import urllib.request
 import urllib.parse
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from strands import Agent, tool
-from strands_tools import use_llm, memory
+from strands_tools import use_llm
 from strands.models import BedrockModel
-from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig
-from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager
+# Memory temporarily disabled for demo recording
+# from strands_tools import memory
+# from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig
+# from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager
 
 app = BedrockAgentCoreApp()
 
@@ -32,12 +34,15 @@ app = BedrockAgentCoreApp()
 # Configuration
 # ============================================================================
 
-AGENTCORE_MEMORY_ID = os.environ.get("AGENTCORE_MEMORY_ID")
+# Memory temporarily disabled for demo recording
+# AGENTCORE_MEMORY_ID = os.environ.get("AGENTCORE_MEMORY_ID")
+AGENTCORE_MEMORY_ID = None
 AWS_REGION = os.environ.get("AWS_REGION", os.environ.get("AWS_DEFAULT_REGION", "us-east-1"))
 BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "us.amazon.nova-lite-v1:0")
 
-if not AGENTCORE_MEMORY_ID:
-    raise ValueError("AGENTCORE_MEMORY_ID environment variable is required but not set")
+# Memory temporarily disabled for demo recording
+# if not AGENTCORE_MEMORY_ID:
+#     raise ValueError("AGENTCORE_MEMORY_ID environment variable is required but not set")
 
 # ============================================================================
 # Weather tool
@@ -73,21 +78,25 @@ _WMO_CONDITIONS = {
 
 
 @tool
-def get_weather(city: str) -> dict:
-    """Get current weather conditions for a city to inform clothing recommendations.
+def get_weather(city: str, date: str = "") -> dict:
+    """Get weather conditions for a city, either current or for a future date (up to 16 days ahead).
 
     Makes two calls to Open-Meteo (no API key required):
     1. Geocoding to resolve city name to lat/lon.
-    2. Forecast for current temperature, feels-like, precipitation, and wind.
+    2. Forecast for weather conditions (current if no date, or daily forecast for the given date).
 
     Args:
         city: City name to look up (e.g. "Indianapolis", "Chicago").
+        date: Optional date in YYYY-MM-DD format for a future forecast (up to 16 days ahead).
+              If empty or not provided, returns current conditions.
 
     Returns:
-        Dict with keys: city, temperature, feels_like, precipitation, wind_speed, condition.
+        Dict with keys: city, temperature, feels_like, precipitation, wind_speed, condition, date.
         All temperatures in °F, wind in km/h, precipitation in mm.
-        Returns {"error": str} if the city is not found.
+        Returns {"error": str} if the city is not found or the date is out of range.
     """
+    from datetime import datetime, timedelta
+
     # Step 1 — geocode
     geo_url = (
         "https://geocoding-api.open-meteo.com/v1/search"
@@ -104,38 +113,98 @@ def get_weather(city: str) -> dict:
     lat, lon = place["latitude"], place["longitude"]
     resolved_name = place.get("name", city)
 
-    # Step 2 — current conditions
-    forecast_url = (
-        "https://api.open-meteo.com/v1/forecast"
-        f"?latitude={lat}&longitude={lon}"
-        "&current=temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m"
-        "&temperature_unit=fahrenheit"
-    )
-    with urllib.request.urlopen(forecast_url, timeout=10) as resp:
-        forecast_data = json.loads(resp.read())
+    # Step 2 — determine if we need current or future forecast
+    if date:
+        # Validate the date
+        try:
+            target_date = datetime.strptime(date, "%Y-%m-%d").date()
+        except ValueError:
+            return {"error": f"Invalid date format: {date}. Use YYYY-MM-DD."}
 
-    current = forecast_data["current"]
-    code = current["weather_code"]
-    condition = _WMO_CONDITIONS.get(code, f"weather code {code}")
+        today = datetime.utcnow().date()
+        days_ahead = (target_date - today).days
 
-    return {
-        "city": resolved_name,
-        "temperature": current["temperature_2m"],
-        "feels_like": current["apparent_temperature"],
-        "precipitation": current["precipitation"],
-        "wind_speed": current["wind_speed_10m"],
-        "condition": condition,
-    }
+        if days_ahead < 0:
+            return {"error": f"Date {date} is in the past. Please provide a current or future date."}
+        if days_ahead > 16:
+            return {"error": f"Date {date} is too far ahead. Open-Meteo supports up to 16 days of forecast."}
+
+        # Use daily forecast endpoint
+        forecast_url = (
+            "https://api.open-meteo.com/v1/forecast"
+            f"?latitude={lat}&longitude={lon}"
+            f"&daily=temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,precipitation_sum,weather_code,wind_speed_10m_max"
+            f"&temperature_unit=fahrenheit"
+            f"&start_date={date}&end_date={date}"
+        )
+        with urllib.request.urlopen(forecast_url, timeout=10) as resp:
+            forecast_data = json.loads(resp.read())
+
+        daily = forecast_data["daily"]
+        code = daily["weather_code"][0]
+        condition = _WMO_CONDITIONS.get(code, f"weather code {code}")
+
+        temp_max = daily["temperature_2m_max"][0]
+        temp_min = daily["temperature_2m_min"][0]
+        feels_max = daily["apparent_temperature_max"][0]
+        feels_min = daily["apparent_temperature_min"][0]
+
+        return {
+            "city": resolved_name,
+            "date": date,
+            "temperature_high": temp_max,
+            "temperature_low": temp_min,
+            "feels_like_high": feels_max,
+            "feels_like_low": feels_min,
+            "precipitation": daily["precipitation_sum"][0],
+            "wind_speed": daily["wind_speed_10m_max"][0],
+            "condition": condition,
+        }
+    else:
+        # Current conditions (original behavior)
+        forecast_url = (
+            "https://api.open-meteo.com/v1/forecast"
+            f"?latitude={lat}&longitude={lon}"
+            "&current=temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m"
+            "&temperature_unit=fahrenheit"
+        )
+        with urllib.request.urlopen(forecast_url, timeout=10) as resp:
+            forecast_data = json.loads(resp.read())
+
+        current = forecast_data["current"]
+        code = current["weather_code"]
+        condition = _WMO_CONDITIONS.get(code, f"weather code {code}")
+
+        return {
+            "city": resolved_name,
+            "date": "today",
+            "temperature": current["temperature_2m"],
+            "feels_like": current["apparent_temperature"],
+            "precipitation": current["precipitation"],
+            "wind_speed": current["wind_speed_10m"],
+            "condition": condition,
+        }
 
 
 # ============================================================================
 
 SYSTEM_PROMPT = """You are WearCast, a friendly weather-based clothing advisor. \
-When the user asks about a city, call the get_weather tool once to fetch current \
+When the user asks about a city, call the get_weather tool to fetch weather \
 conditions, then give practical outfit recommendations.
+
+The get_weather tool supports an optional "date" parameter (YYYY-MM-DD format) \
+for forecasts up to 16 days ahead. If the user mentions a future date \
+(e.g. "this Saturday", "next Tuesday", "June 25th"), calculate the correct \
+YYYY-MM-DD date and pass it to get_weather. If no date is mentioned or the \
+user says "today" or "now", omit the date parameter to get current conditions.
+
+For future-date forecasts, the tool returns high/low temperatures instead of a \
+single temperature. Base your advice on the feels_like_high and feels_like_low \
+range so the user is prepared for the full day.
 
 Reasoning guidelines:
 - Base advice on feels_like (apparent temperature), not raw temperature.
+- For future dates, consider the full high-to-low range for the day.
 - Recommend an umbrella or rain jacket if precipitation > 0 mm.
 - Suggest a windbreaker or extra layer if wind_speed > 20 km/h.
 - Layer advice: heavy coat < 20 °F, winter coat 20–35 °F, jacket 35–55 °F, \
@@ -145,27 +214,26 @@ umbrella" rather than listing rules).
 
 Response style:
 - Write 3–5 sentences so the token stream is visibly satisfying.
-- Start with the city name and the plain-English condition (from the tool result).
+- Start with the city name, the date, and the plain-English condition (from the tool result).
 - End with a concrete outfit recommendation.
-- Use your memory tool to remember the conversation so follow-up questions like \
-"What about Chicago?" are understood in context.
 - Format responses in Markdown."""
 
 
-def create_session_manager(runtime_session_id: str, user_id: str = None):
-    """Create AgentCore Memory session manager for conversation persistence."""
-    actor_id = user_id if user_id else "user"
-
-    config = AgentCoreMemoryConfig(
-        memory_id=AGENTCORE_MEMORY_ID,
-        session_id=runtime_session_id,
-        actor_id=actor_id
-    )
-
-    return AgentCoreMemorySessionManager(
-        agentcore_memory_config=config,
-        region_name=AWS_REGION
-    )
+# Memory temporarily disabled for demo recording
+# def create_session_manager(runtime_session_id: str, user_id: str = None):
+#     """Create AgentCore Memory session manager for conversation persistence."""
+#     actor_id = user_id if user_id else "user"
+#
+#     config = AgentCoreMemoryConfig(
+#         memory_id=AGENTCORE_MEMORY_ID,
+#         session_id=runtime_session_id,
+#         actor_id=actor_id
+#     )
+#
+#     return AgentCoreMemorySessionManager(
+#         agentcore_memory_config=config,
+#         region_name=AWS_REGION
+#     )
 
 
 @app.websocket
@@ -220,14 +288,14 @@ async def websocket_handler(websocket, context):
             # Create agent on first message, or recreate if session changes
             if agent is None or msg_session_id != session_id:
                 session_id = msg_session_id
-                session_manager = create_session_manager(session_id, user_id)
+                # Memory temporarily disabled for demo recording
+                # session_manager = create_session_manager(session_id, user_id)
 
                 agent = Agent(
                     agent_id="wearcast",
                     model=BedrockModel(model_id=BEDROCK_MODEL_ID),
-                    tools=[get_weather, memory, use_llm],
+                    tools=[get_weather, use_llm],
                     system_prompt=SYSTEM_PROMPT,
-                    session_manager=session_manager,
                 )
                 print(f"Agent initialized - Model: {BEDROCK_MODEL_ID}, Session: {session_id}, Messages loaded: {len(agent.messages)}")
 
@@ -330,14 +398,14 @@ def invoke(payload):
             runtime_session_id = f"session_{uuid.uuid4().hex[:16]}"
             print(f"Warning: Generated session ID: {runtime_session_id}")
 
-        session_manager = create_session_manager(runtime_session_id, user_id)
+        # Memory temporarily disabled for demo recording
+        # session_manager = create_session_manager(runtime_session_id, user_id)
 
         agent = Agent(
             agent_id="wearcast",
             model=BedrockModel(model_id=BEDROCK_MODEL_ID),
-            tools=[get_weather, memory, use_llm],
+            tools=[get_weather, use_llm],
             system_prompt=SYSTEM_PROMPT,
-            session_manager=session_manager,
         )
 
         print(f"Agent initialized with model: {BEDROCK_MODEL_ID}, session: {runtime_session_id}")
