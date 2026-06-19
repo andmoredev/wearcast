@@ -225,9 +225,9 @@ async def websocket_handler(websocket, context):
                 agent = Agent(
                     agent_id="wearcast",
                     model=BedrockModel(model_id=BEDROCK_MODEL_ID),
-                    tools=[get_weather, memory, use_llm],
+                    tools=[get_weather],
                     system_prompt=SYSTEM_PROMPT,
-                    session_manager=session_manager,
+                    # session_manager=session_manager,
                 )
                 print(f"Agent initialized - Model: {BEDROCK_MODEL_ID}, Session: {session_id}, Messages loaded: {len(agent.messages)}")
 
