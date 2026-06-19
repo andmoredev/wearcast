@@ -21,7 +21,7 @@ import urllib.request
 import urllib.parse
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from strands import Agent, tool
-from strands_tools import use_llm, memory
+from strands_tools import use_llm
 from strands.models import BedrockModel
 from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig
 from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager
@@ -221,8 +221,6 @@ Response style:
 - Write 3–5 sentences so the token stream is visibly satisfying.
 - Start with the city name, the date, and the plain-English condition (from the tool result).
 - End with a concrete outfit recommendation.
-- Use your memory tool to remember the conversation so follow-up questions like \
-"What about Chicago?" are understood in context.
 - Format responses in Markdown."""
 
 
@@ -308,7 +306,7 @@ async def websocket_handler(websocket, context):
                 agent = Agent(
                     agent_id="wearcast",
                     model=BedrockModel(model_id=BEDROCK_MODEL_ID),
-                    tools=[get_weather, memory, use_llm],
+                    tools=[get_weather, use_llm],
                     system_prompt=get_system_prompt(),
                     session_manager=session_manager,
                 )
@@ -418,7 +416,7 @@ def invoke(payload):
         agent = Agent(
             agent_id="wearcast",
             model=BedrockModel(model_id=BEDROCK_MODEL_ID),
-            tools=[get_weather, memory, use_llm],
+            tools=[get_weather, use_llm],
             system_prompt=get_system_prompt(),
             session_manager=session_manager,
         )
