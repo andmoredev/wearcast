@@ -21,7 +21,8 @@ import urllib.request
 import urllib.parse
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from strands import Agent, tool
-from strands_tools import use_llm
+# Tools temporarily removed for demo
+# from strands_tools import use_llm
 from strands.models import BedrockModel
 from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig
 from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager
@@ -306,7 +307,7 @@ async def websocket_handler(websocket, context):
                 agent = Agent(
                     agent_id="wearcast",
                     model=BedrockModel(model_id=BEDROCK_MODEL_ID),
-                    tools=[use_llm],
+                    tools=[],
                     system_prompt=get_system_prompt(),
                     session_manager=session_manager,
                 )
@@ -416,7 +417,7 @@ def invoke(payload):
         agent = Agent(
             agent_id="wearcast",
             model=BedrockModel(model_id=BEDROCK_MODEL_ID),
-            tools=[use_llm],
+            tools=[],
             system_prompt=get_system_prompt(),
             session_manager=session_manager,
         )
