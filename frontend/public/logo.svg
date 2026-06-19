@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="brandGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF6B35"/>
+      <stop offset="100%" stop-color="#FF8A65"/>
+    </linearGradient>
+    <linearGradient id="darkGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1a1040"/>
+      <stop offset="100%" stop-color="#0a0f1a"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="248" fill="url(#darkGradient)" stroke="url(#brandGradient)" stroke-width="6"/>
+
+  <!-- Sun element -->
+  <circle cx="210" cy="175" r="50" fill="url(#brandGradient)" filter="url(#glow)"/>
+
+  <!-- Sun rays -->
+  <g stroke="url(#brandGradient)" stroke-width="8" stroke-linecap="round">
+    <line x1="210" y1="110" x2="210" y2="95"/>
+    <line x1="210" y1="240" x2="210" y2="255"/>
+    <line x1="145" y1="175" x2="130" y2="175"/>
+    <line x1="275" y1="175" x2="290" y2="175"/>
+    <line x1="164" y1="129" x2="153" y2="118"/>
+    <line x1="256" y1="129" x2="267" y2="118"/>
+    <line x1="164" y1="221" x2="153" y2="232"/>
+    <line x1="256" y1="221" x2="267" y2="232"/>
+  </g>
+
+  <!-- Cloud element -->
+  <g fill="rgba(255,255,255,0.9)">
+    <circle cx="300" cy="210" r="35"/>
+    <circle cx="340" cy="210" r="28"/>
+    <circle cx="270" cy="210" r="25"/>
+    <rect x="270" y="210" width="70" height="30" rx="2"/>
+  </g>
+
+  <!-- Hanger / clothing element -->
+  <g stroke="url(#brandGradient)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Hanger hook -->
+    <path d="M256 280 C256 268, 268 260, 268 260"/>
+    <circle cx="268" cy="255" r="8" fill="none"/>
+    <!-- Hanger body -->
+    <path d="M256 280 L185 330 L185 340"/>
+    <path d="M256 280 L327 330 L327 340"/>
+    <!-- T-shirt outline -->
+    <path d="M185 340 L185 410 L327 410 L327 340"/>
+    <!-- Sleeves -->
+    <path d="M185 340 L155 360 L155 375 L185 370"/>
+    <path d="M327 340 L357 360 L357 375 L327 370"/>
+    <!-- Collar -->
+    <path d="M230 340 C240 355, 272 355, 282 340"/>
+  </g>
+
+  <!-- Small weather drops on shirt -->
+  <g fill="url(#brandGradient)" opacity="0.6">
+    <circle cx="230" cy="375" r="5"/>
+    <circle cx="256" cy="385" r="4"/>
+    <circle cx="280" cy="370" r="5"/>
+  </g>
+</svg>
