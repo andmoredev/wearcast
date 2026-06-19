@@ -78,17 +78,19 @@ _WMO_CONDITIONS = {
 
 
 @tool
-def get_weather(city: str, date: str = "") -> dict:
+def get_weather(city: str, date: str = "today") -> dict:
     """Get weather conditions for a city, either current or for a future date (up to 16 days ahead).
+
+    IMPORTANT: This tool DOES support future date forecasts. Always pass a date parameter.
 
     Makes two calls to Open-Meteo (no API key required):
     1. Geocoding to resolve city name to lat/lon.
-    2. Forecast for weather conditions (current if no date, or daily forecast for the given date).
+    2. Forecast for weather conditions (current if date is "today", or daily forecast for a YYYY-MM-DD date).
 
     Args:
         city: City name to look up (e.g. "Indianapolis", "Chicago").
-        date: Optional date in YYYY-MM-DD format for a future forecast (up to 16 days ahead).
-              If empty or not provided, returns current conditions.
+        date: Date for the forecast. Use "today" for current conditions, or a YYYY-MM-DD
+              format string for a future date (up to 16 days ahead). Examples: "today", "2025-01-20".
 
     Returns:
         Dict with keys: city, temperature, feels_like, precipitation, wind_speed, condition, date.
@@ -114,7 +116,7 @@ def get_weather(city: str, date: str = "") -> dict:
     resolved_name = place.get("name", city)
 
     # Step 2 — determine if we need current or future forecast
-    if date:
+    if date and date.lower() != "today":
         # Validate the date
         try:
             target_date = datetime.strptime(date, "%Y-%m-%d").date()
@@ -192,11 +194,15 @@ SYSTEM_PROMPT = """You are WearCast, a friendly weather-based clothing advisor. 
 When the user asks about a city, call the get_weather tool to fetch weather \
 conditions, then give practical outfit recommendations.
 
-The get_weather tool supports an optional "date" parameter (YYYY-MM-DD format) \
-for forecasts up to 16 days ahead. If the user mentions a future date \
-(e.g. "this Saturday", "next Tuesday", "June 25th"), calculate the correct \
-YYYY-MM-DD date and pass it to get_weather. If no date is mentioned or the \
-user says "today" or "now", omit the date parameter to get current conditions.
+IMPORTANT: The get_weather tool FULLY SUPPORTS future date forecasts up to 16 \
+days ahead. You MUST use it for future dates — never tell the user that forecasts \
+are unavailable. Pass the "date" parameter in YYYY-MM-DD format for any future \
+date the user mentions.
+
+When the user mentions a future date (e.g. "this Saturday", "next Tuesday", \
+"June 25th", "next week"), calculate the correct YYYY-MM-DD date and pass it \
+to get_weather using the "date" parameter. If no date is mentioned or the user \
+says "today" or "now", pass date="today" to get current conditions.
 
 For future-date forecasts, the tool returns high/low temperatures instead of a \
 single temperature. Base your advice on the feels_like_high and feels_like_low \
