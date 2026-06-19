@@ -127,7 +127,8 @@ def get_weather(city: str, date: str = "today") -> dict:
         days_ahead = (target_date - today).days
 
         if days_ahead < 0:
-            return {"error": f"Date {date} is in the past. Please provide a current or future date."}
+            # Date is in the past — fall back to current conditions with a note
+            return get_weather(city, "today")
         if days_ahead > 16:
             return {"error": f"Date {date} is too far ahead. Open-Meteo supports up to 16 days of forecast."}
 
@@ -190,9 +191,11 @@ def get_weather(city: str, date: str = "today") -> dict:
 
 # ============================================================================
 
-SYSTEM_PROMPT = """You are WearCast, a friendly weather-based clothing advisor. \
+SYSTEM_PROMPT_TEMPLATE = """You are WearCast, a friendly weather-based clothing advisor. \
 When the user asks about a city, call the get_weather tool to fetch weather \
 conditions, then give practical outfit recommendations.
+
+TODAY'S DATE: {today} ({day_of_week}).
 
 IMPORTANT: The get_weather tool FULLY SUPPORTS future date forecasts up to 16 \
 days ahead. You MUST use it for future dates — never tell the user that forecasts \
@@ -200,9 +203,10 @@ are unavailable. Pass the "date" parameter in YYYY-MM-DD format for any future \
 date the user mentions.
 
 When the user mentions a future date (e.g. "this Saturday", "next Tuesday", \
-"June 25th", "next week"), calculate the correct YYYY-MM-DD date and pass it \
-to get_weather using the "date" parameter. If no date is mentioned or the user \
-says "today" or "now", pass date="today" to get current conditions.
+"June 25th", "next week"), use TODAY'S DATE above to calculate the correct \
+YYYY-MM-DD date and pass it to get_weather using the "date" parameter. \
+If no date is mentioned or the user says "today" or "now", pass date="today" \
+to get current conditions.
 
 For future-date forecasts, the tool returns high/low temperatures instead of a \
 single temperature. Base your advice on the feels_like_high and feels_like_low \
@@ -223,6 +227,15 @@ Response style:
 - Start with the city name, the date, and the plain-English condition (from the tool result).
 - End with a concrete outfit recommendation.
 - Format responses in Markdown."""
+
+
+def get_system_prompt() -> str:
+    """Build system prompt with today's date injected for accurate date calculations."""
+    from datetime import datetime
+    now = datetime.utcnow()
+    today_str = now.strftime("%Y-%m-%d")
+    day_of_week = now.strftime("%A")
+    return SYSTEM_PROMPT_TEMPLATE.format(today=today_str, day_of_week=day_of_week)
 
 
 # Memory temporarily disabled for demo recording
@@ -301,7 +314,7 @@ async def websocket_handler(websocket, context):
                     agent_id="wearcast",
                     model=BedrockModel(model_id=BEDROCK_MODEL_ID),
                     tools=[get_weather, use_llm],
-                    system_prompt=SYSTEM_PROMPT,
+                    system_prompt=get_system_prompt(),
                 )
                 print(f"Agent initialized - Model: {BEDROCK_MODEL_ID}, Session: {session_id}, Messages loaded: {len(agent.messages)}")
 
@@ -411,7 +424,7 @@ def invoke(payload):
             agent_id="wearcast",
             model=BedrockModel(model_id=BEDROCK_MODEL_ID),
             tools=[get_weather, use_llm],
-            system_prompt=SYSTEM_PROMPT,
+            system_prompt=get_system_prompt(),
         )
 
         print(f"Agent initialized with model: {BEDROCK_MODEL_ID}, session: {runtime_session_id}")
