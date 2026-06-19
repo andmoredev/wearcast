@@ -21,12 +21,10 @@ import urllib.request
 import urllib.parse
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from strands import Agent, tool
-from strands_tools import use_llm
+from strands_tools import use_llm, memory
 from strands.models import BedrockModel
-# Memory temporarily disabled for demo recording
-# from strands_tools import memory
-# from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig
-# from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager
+from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig
+from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager
 
 app = BedrockAgentCoreApp()
 
@@ -34,15 +32,12 @@ app = BedrockAgentCoreApp()
 # Configuration
 # ============================================================================
 
-# Memory temporarily disabled for demo recording
-# AGENTCORE_MEMORY_ID = os.environ.get("AGENTCORE_MEMORY_ID")
-AGENTCORE_MEMORY_ID = None
+AGENTCORE_MEMORY_ID = os.environ.get("AGENTCORE_MEMORY_ID")
 AWS_REGION = os.environ.get("AWS_REGION", os.environ.get("AWS_DEFAULT_REGION", "us-east-1"))
 BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "us.amazon.nova-lite-v1:0")
 
-# Memory temporarily disabled for demo recording
-# if not AGENTCORE_MEMORY_ID:
-#     raise ValueError("AGENTCORE_MEMORY_ID environment variable is required but not set")
+if not AGENTCORE_MEMORY_ID:
+    raise ValueError("AGENTCORE_MEMORY_ID environment variable is required but not set")
 
 # ============================================================================
 # Weather tool
@@ -226,6 +221,8 @@ Response style:
 - Write 3–5 sentences so the token stream is visibly satisfying.
 - Start with the city name, the date, and the plain-English condition (from the tool result).
 - End with a concrete outfit recommendation.
+- Use your memory tool to remember the conversation so follow-up questions like \
+"What about Chicago?" are understood in context.
 - Format responses in Markdown."""
 
 
@@ -238,21 +235,20 @@ def get_system_prompt() -> str:
     return SYSTEM_PROMPT_TEMPLATE.format(today=today_str, day_of_week=day_of_week)
 
 
-# Memory temporarily disabled for demo recording
-# def create_session_manager(runtime_session_id: str, user_id: str = None):
-#     """Create AgentCore Memory session manager for conversation persistence."""
-#     actor_id = user_id if user_id else "user"
-#
-#     config = AgentCoreMemoryConfig(
-#         memory_id=AGENTCORE_MEMORY_ID,
-#         session_id=runtime_session_id,
-#         actor_id=actor_id
-#     )
-#
-#     return AgentCoreMemorySessionManager(
-#         agentcore_memory_config=config,
-#         region_name=AWS_REGION
-#     )
+def create_session_manager(runtime_session_id: str, user_id: str = None):
+    """Create AgentCore Memory session manager for conversation persistence."""
+    actor_id = user_id if user_id else "user"
+
+    config = AgentCoreMemoryConfig(
+        memory_id=AGENTCORE_MEMORY_ID,
+        session_id=runtime_session_id,
+        actor_id=actor_id
+    )
+
+    return AgentCoreMemorySessionManager(
+        agentcore_memory_config=config,
+        region_name=AWS_REGION
+    )
 
 
 @app.websocket
@@ -304,16 +300,19 @@ async def websocket_handler(websocket, context):
 
             print(f"Request received - Session: {msg_session_id}")
 
-            # Create a fresh agent for EVERY message to disable in-session memory
-            # (Demo recording: each message is treated as standalone)
-            session_id = msg_session_id
-            agent = Agent(
-                agent_id="wearcast",
-                model=BedrockModel(model_id=BEDROCK_MODEL_ID),
-                tools=[get_weather, use_llm],
-                system_prompt=get_system_prompt(),
-            )
-            print(f"Agent initialized - Model: {BEDROCK_MODEL_ID}, Session: {session_id}, Messages loaded: {len(agent.messages)}")
+            # Create agent on first message, or recreate if session changes
+            if agent is None or msg_session_id != session_id:
+                session_id = msg_session_id
+                session_manager = create_session_manager(session_id, user_id)
+
+                agent = Agent(
+                    agent_id="wearcast",
+                    model=BedrockModel(model_id=BEDROCK_MODEL_ID),
+                    tools=[get_weather, memory, use_llm],
+                    system_prompt=get_system_prompt(),
+                    session_manager=session_manager,
+                )
+                print(f"Agent initialized - Model: {BEDROCK_MODEL_ID}, Session: {session_id}, Messages loaded: {len(agent.messages)}")
 
             print(f"Messages in context: {len(agent.messages)}")
 
@@ -414,14 +413,14 @@ def invoke(payload):
             runtime_session_id = f"session_{uuid.uuid4().hex[:16]}"
             print(f"Warning: Generated session ID: {runtime_session_id}")
 
-        # Memory temporarily disabled for demo recording
-        # session_manager = create_session_manager(runtime_session_id, user_id)
+        session_manager = create_session_manager(runtime_session_id, user_id)
 
         agent = Agent(
             agent_id="wearcast",
             model=BedrockModel(model_id=BEDROCK_MODEL_ID),
-            tools=[get_weather, use_llm],
+            tools=[get_weather, memory, use_llm],
             system_prompt=get_system_prompt(),
+            session_manager=session_manager,
         )
 
         print(f"Agent initialized with model: {BEDROCK_MODEL_ID}, session: {runtime_session_id}")
