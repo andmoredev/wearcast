@@ -304,19 +304,16 @@ async def websocket_handler(websocket, context):
 
             print(f"Request received - Session: {msg_session_id}")
 
-            # Create agent on first message, or recreate if session changes
-            if agent is None or msg_session_id != session_id:
-                session_id = msg_session_id
-                # Memory temporarily disabled for demo recording
-                # session_manager = create_session_manager(session_id, user_id)
-
-                agent = Agent(
-                    agent_id="wearcast",
-                    model=BedrockModel(model_id=BEDROCK_MODEL_ID),
-                    tools=[get_weather, use_llm],
-                    system_prompt=get_system_prompt(),
-                )
-                print(f"Agent initialized - Model: {BEDROCK_MODEL_ID}, Session: {session_id}, Messages loaded: {len(agent.messages)}")
+            # Create a fresh agent for EVERY message to disable in-session memory
+            # (Demo recording: each message is treated as standalone)
+            session_id = msg_session_id
+            agent = Agent(
+                agent_id="wearcast",
+                model=BedrockModel(model_id=BEDROCK_MODEL_ID),
+                tools=[get_weather, use_llm],
+                system_prompt=get_system_prompt(),
+            )
+            print(f"Agent initialized - Model: {BEDROCK_MODEL_ID}, Session: {session_id}, Messages loaded: {len(agent.messages)}")
 
             print(f"Messages in context: {len(agent.messages)}")
 
