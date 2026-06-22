@@ -21,7 +21,8 @@ import urllib.request
 import urllib.parse
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from strands import Agent, tool
-from strands_tools import use_llm, memory
+# Tools temporarily removed for demo
+# from strands_tools import use_llm
 from strands.models import BedrockModel
 from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig
 from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager
@@ -73,21 +74,27 @@ _WMO_CONDITIONS = {
 
 
 @tool
-def get_weather(city: str) -> dict:
-    """Get current weather conditions for a city to inform clothing recommendations.
+def get_weather(city: str, date: str = "today") -> dict:
+    """Get weather conditions for a city, either current or for a future date (up to 16 days ahead).
+
+    IMPORTANT: This tool DOES support future date forecasts. Always pass a date parameter.
 
     Makes two calls to Open-Meteo (no API key required):
     1. Geocoding to resolve city name to lat/lon.
-    2. Forecast for current temperature, feels-like, precipitation, and wind.
+    2. Forecast for weather conditions (current if date is "today", or daily forecast for a YYYY-MM-DD date).
 
     Args:
         city: City name to look up (e.g. "Indianapolis", "Chicago").
+        date: Date for the forecast. Use "today" for current conditions, or a YYYY-MM-DD
+              format string for a future date (up to 16 days ahead). Examples: "today", "2025-01-20".
 
     Returns:
-        Dict with keys: city, temperature, feels_like, precipitation, wind_speed, condition.
+        Dict with keys: city, temperature, feels_like, precipitation, wind_speed, condition, date.
         All temperatures in °F, wind in km/h, precipitation in mm.
-        Returns {"error": str} if the city is not found.
+        Returns {"error": str} if the city is not found or the date is out of range.
     """
+    from datetime import datetime, timedelta
+
     # Step 1 — geocode
     geo_url = (
         "https://geocoding-api.open-meteo.com/v1/search"
@@ -104,52 +111,114 @@ def get_weather(city: str) -> dict:
     lat, lon = place["latitude"], place["longitude"]
     resolved_name = place.get("name", city)
 
-    # Step 2 — current conditions
-    forecast_url = (
-        "https://api.open-meteo.com/v1/forecast"
-        f"?latitude={lat}&longitude={lon}"
-        "&current=temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m"
-        "&temperature_unit=fahrenheit"
-    )
-    with urllib.request.urlopen(forecast_url, timeout=10) as resp:
-        forecast_data = json.loads(resp.read())
+    # Step 2 — determine if we need current or future forecast
+    if date and date.lower() != "today":
+        # Validate the date
+        try:
+            target_date = datetime.strptime(date, "%Y-%m-%d").date()
+        except ValueError:
+            return {"error": f"Invalid date format: {date}. Use YYYY-MM-DD."}
 
-    current = forecast_data["current"]
-    code = current["weather_code"]
-    condition = _WMO_CONDITIONS.get(code, f"weather code {code}")
+        today = datetime.utcnow().date()
+        days_ahead = (target_date - today).days
 
-    return {
-        "city": resolved_name,
-        "temperature": current["temperature_2m"],
-        "feels_like": current["apparent_temperature"],
-        "precipitation": current["precipitation"],
-        "wind_speed": current["wind_speed_10m"],
-        "condition": condition,
-    }
+        if days_ahead < 0:
+            # Date is in the past — fall back to current conditions with a note
+            return get_weather(city, "today")
+        if days_ahead > 16:
+            return {"error": f"Date {date} is too far ahead. Open-Meteo supports up to 16 days of forecast."}
+
+        # Use daily forecast endpoint
+        forecast_url = (
+            "https://api.open-meteo.com/v1/forecast"
+            f"?latitude={lat}&longitude={lon}"
+            f"&daily=temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,precipitation_sum,weather_code,wind_speed_10m_max"
+            f"&temperature_unit=fahrenheit"
+            f"&start_date={date}&end_date={date}"
+        )
+        with urllib.request.urlopen(forecast_url, timeout=10) as resp:
+            forecast_data = json.loads(resp.read())
+
+        daily = forecast_data["daily"]
+        code = daily["weather_code"][0]
+        condition = _WMO_CONDITIONS.get(code, f"weather code {code}")
+
+        temp_max = daily["temperature_2m_max"][0]
+        temp_min = daily["temperature_2m_min"][0]
+        feels_max = daily["apparent_temperature_max"][0]
+        feels_min = daily["apparent_temperature_min"][0]
+
+        return {
+            "city": resolved_name,
+            "date": date,
+            "temperature_high": temp_max,
+            "temperature_low": temp_min,
+            "feels_like_high": feels_max,
+            "feels_like_low": feels_min,
+            "precipitation": daily["precipitation_sum"][0],
+            "wind_speed": daily["wind_speed_10m_max"][0],
+            "condition": condition,
+        }
+    else:
+        # Current conditions (original behavior)
+        forecast_url = (
+            "https://api.open-meteo.com/v1/forecast"
+            f"?latitude={lat}&longitude={lon}"
+            "&current=temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m"
+            "&temperature_unit=fahrenheit"
+        )
+        with urllib.request.urlopen(forecast_url, timeout=10) as resp:
+            forecast_data = json.loads(resp.read())
+
+        current = forecast_data["current"]
+        code = current["weather_code"]
+        condition = _WMO_CONDITIONS.get(code, f"weather code {code}")
+
+        return {
+            "city": resolved_name,
+            "date": "today",
+            "temperature": current["temperature_2m"],
+            "feels_like": current["apparent_temperature"],
+            "precipitation": current["precipitation"],
+            "wind_speed": current["wind_speed_10m"],
+            "condition": condition,
+        }
 
 
 # ============================================================================
 
-SYSTEM_PROMPT = """You are WearCast, a friendly weather-based clothing advisor. \
-When the user asks about a city, call the get_weather tool once to fetch current \
-conditions, then give practical outfit recommendations.
+SYSTEM_PROMPT_TEMPLATE = """You are WearCast, a friendly weather-based clothing advisor. \
+When the user asks about a city, give practical outfit recommendations based on \
+your general knowledge of that city's typical weather patterns.
+
+TODAY'S DATE: {today} ({day_of_week}).
+
+Since you do not have access to real-time weather data, provide your best \
+clothing advice based on typical weather for the city and time of year. \
+Be helpful and give a concrete recommendation, but let the user know your \
+advice is based on general knowledge rather than a live forecast.
 
 Reasoning guidelines:
-- Base advice on feels_like (apparent temperature), not raw temperature.
-- Recommend an umbrella or rain jacket if precipitation > 0 mm.
-- Suggest a windbreaker or extra layer if wind_speed > 20 km/h.
+- Consider the city's typical climate for the current season.
+- Recommend an umbrella or rain jacket if the city is known for rain this time of year.
 - Layer advice: heavy coat < 20 °F, winter coat 20–35 °F, jacket 35–55 °F, \
 light layer 55–70 °F, light clothing > 70 °F.
-- Combine all factors into one coherent recommendation (e.g. "light jacket + \
-umbrella" rather than listing rules).
+- Combine all factors into one coherent recommendation.
 
 Response style:
 - Write 3–5 sentences so the token stream is visibly satisfying.
-- Start with the city name and the plain-English condition (from the tool result).
+- Start with the city name and your best guess at conditions.
 - End with a concrete outfit recommendation.
-- Use your memory tool to remember the conversation so follow-up questions like \
-"What about Chicago?" are understood in context.
 - Format responses in Markdown."""
+
+
+def get_system_prompt() -> str:
+    """Build system prompt with today's date injected for accurate date calculations."""
+    from datetime import datetime
+    now = datetime.utcnow()
+    today_str = now.strftime("%Y-%m-%d")
+    day_of_week = now.strftime("%A")
+    return SYSTEM_PROMPT_TEMPLATE.format(today=today_str, day_of_week=day_of_week)
 
 
 def create_session_manager(runtime_session_id: str, user_id: str = None):
@@ -225,8 +294,8 @@ async def websocket_handler(websocket, context):
                 agent = Agent(
                     agent_id="wearcast",
                     model=BedrockModel(model_id=BEDROCK_MODEL_ID),
-                    tools=[get_weather, memory, use_llm],
-                    system_prompt=SYSTEM_PROMPT,
+                    tools=[],
+                    system_prompt=get_system_prompt(),
                     session_manager=session_manager,
                 )
                 print(f"Agent initialized - Model: {BEDROCK_MODEL_ID}, Session: {session_id}, Messages loaded: {len(agent.messages)}")
@@ -335,8 +404,8 @@ def invoke(payload):
         agent = Agent(
             agent_id="wearcast",
             model=BedrockModel(model_id=BEDROCK_MODEL_ID),
-            tools=[get_weather, memory, use_llm],
-            system_prompt=SYSTEM_PROMPT,
+            tools=[],
+            system_prompt=get_system_prompt(),
             session_manager=session_manager,
         )
 
