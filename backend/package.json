@@ -4,7 +4,6 @@
   "description": "Backend Lambda functions for AgentCore Chatbot",
   "type": "module",
   "dependencies": {
-    "@aws-sdk/client-bedrock-agentcore": "^3.0.0",
     "@aws-crypto/sha256-js": "^5.2.0",
     "@smithy/protocol-http": "^5.0.0"
   },

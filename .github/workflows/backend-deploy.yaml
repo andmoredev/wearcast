@@ -81,37 +81,9 @@ jobs:
           python-version: '3.13'
           architecture: 'aarch64-manylinux2014'
 
-  collect-agent-artifacts:
-    name: Collect Agent Artifacts & Generate Parameters
-    runs-on: ubuntu-latest
-    needs: [package-agent]
-    outputs:
-      agent-key: ${{ steps.collect.outputs.agent-key }}
-    steps:
-      - name: Collect agent artifacts and generate parameters
-        id: collect
-        run: |
-          echo "## Agent Artifacts Collection" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          AGENT_KEY="${{ needs.package-agent.outputs.s3-key }}"
-          AGENT_SIZE="${{ needs.package-agent.outputs.package-size }}"
-
-          if [ -z "$AGENT_KEY" ]; then
-            echo "Agent S3 key is missing" >> $GITHUB_STEP_SUMMARY
-            echo "::error::Agent packaging failed - S3 key is missing"
-            exit 1
-          fi
-
-          echo "Agent: \`$AGENT_KEY\` ($AGENT_SIZE)" >> $GITHUB_STEP_SUMMARY
-          echo "agent-key=$AGENT_KEY" >> $GITHUB_OUTPUT
-
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Agent artifacts validated. Proceeding with deployment..." >> $GITHUB_STEP_SUMMARY
-
   deploy-backend:
     runs-on: ubuntu-latest
-    needs: [collect-agent-artifacts, prepare-deployment]
+    needs: [package-agent, prepare-deployment]
     outputs:
       api-url: ${{ steps.deploy.outputs.api-url }}
 
@@ -142,9 +114,8 @@ jobs:
           ENV_HASH: ${{ needs.prepare-deployment.outputs.env_hash }}
           ENV_NAME: ${{ needs.prepare-deployment.outputs.env_name }}
           ARTIFACTS_BUCKET_NAME: ${{ secrets.ARTIFACTS_BUCKET_NAME }}
-          AGENT_DIRECT_DEPLOY_KEY: ${{ needs.collect-agent-artifacts.outputs.agent-key }}
+          AGENT_DIRECT_DEPLOY_KEY: ${{ needs.package-agent.outputs.s3-key }}
           AWS_REGION: ${{ env.AWS_REGION }}
-
         run: |
           envsubst < samconfig.yaml.template > samconfig.yaml
           echo "Generated samconfig.yaml:"
@@ -173,14 +144,9 @@ jobs:
           echo "api-url=$API_URL" >> $GITHUB_OUTPUT
 
           # Add to GitHub Summary
-          echo "## 🚀 Backend API Deployed" >> $GITHUB_STEP_SUMMARY
+          echo "## Backend API Deployed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**🌐 API URL:** [$API_URL]($API_URL)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Deployed Agent" >> $GITHUB_STEP_SUMMARY
-          echo "- **Agent (S3)**: \`${{ needs.collect-agent-artifacts.outputs.agent-key }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**API URL:** [$API_URL]($API_URL)" >> $GITHUB_STEP_SUMMARY
 
           echo "Backend infrastructure deployed successfully:"
           echo "API URL: $API_URL"
-          echo "Agent deployed: ${{ needs.collect-agent-artifacts.outputs.agent-key }}"
