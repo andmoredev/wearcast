@@ -21,8 +21,7 @@ import urllib.request
 import urllib.parse
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from strands import Agent, tool
-# Tools temporarily removed for demo
-# from strands_tools import use_llm
+from strands_tools import use_llm
 from strands.models import BedrockModel
 from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig
 from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager
@@ -188,26 +187,27 @@ def get_weather(city: str, date: str = "today") -> dict:
 # ============================================================================
 
 SYSTEM_PROMPT_TEMPLATE = """You are WearCast, a friendly weather-based clothing advisor. \
-When the user asks about a city, give practical outfit recommendations based on \
-your general knowledge of that city's typical weather patterns.
+When the user asks about a city, use the get_weather tool to fetch current or forecast \
+conditions, then give practical outfit recommendations based on the real data.
 
 TODAY'S DATE: {today} ({day_of_week}).
 
-Since you do not have access to real-time weather data, provide your best \
-clothing advice based on typical weather for the city and time of year. \
-Be helpful and give a concrete recommendation, but let the user know your \
-advice is based on general knowledge rather than a live forecast.
+Workflow:
+1. Use get_weather(city, date) to get real conditions. Use "today" for current weather \
+or a YYYY-MM-DD string for future dates (up to 16 days ahead).
+2. Analyze temperature, wind, precipitation, and condition from the tool response.
+3. Provide a clothing recommendation based on the actual forecast.
 
 Reasoning guidelines:
-- Consider the city's typical climate for the current season.
-- Recommend an umbrella or rain jacket if the city is known for rain this time of year.
-- Layer advice: heavy coat < 20 °F, winter coat 20–35 °F, jacket 35–55 °F, \
+- Heavy coat < 20 °F, winter coat 20–35 °F, jacket 35–55 °F, \
 light layer 55–70 °F, light clothing > 70 °F.
+- Recommend an umbrella or rain jacket if precipitation > 0 or condition includes rain/showers.
+- Factor in wind speed and feels-like temperature for layering advice.
 - Combine all factors into one coherent recommendation.
 
 Response style:
 - Write 3–5 sentences so the token stream is visibly satisfying.
-- Start with the city name and your best guess at conditions.
+- Start with the city name and actual conditions.
 - End with a concrete outfit recommendation.
 - Format responses in Markdown."""
 
@@ -294,7 +294,7 @@ async def websocket_handler(websocket, context):
                 agent = Agent(
                     agent_id="wearcast",
                     model=BedrockModel(model_id=BEDROCK_MODEL_ID),
-                    tools=[],
+                    tools=[get_weather, use_llm],
                     system_prompt=get_system_prompt(),
                     session_manager=session_manager,
                 )
@@ -404,7 +404,7 @@ def invoke(payload):
         agent = Agent(
             agent_id="wearcast",
             model=BedrockModel(model_id=BEDROCK_MODEL_ID),
-            tools=[],
+            tools=[get_weather, use_llm],
             system_prompt=get_system_prompt(),
             session_manager=session_manager,
         )
