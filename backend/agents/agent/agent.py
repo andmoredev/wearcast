@@ -286,19 +286,17 @@ async def websocket_handler(websocket, context):
 
             print(f"Request received - Session: {msg_session_id}")
 
-            # Create agent on first message, or recreate if session changes
-            if agent is None or msg_session_id != session_id:
-                session_id = msg_session_id
-                # session_manager = create_session_manager(session_id, user_id)
+            # Recreate the agent on every message so no conversation history
+            # (in-memory or otherwise) carries over between turns.
+            session_id = msg_session_id
 
-                agent = Agent(
-                    agent_id="wearcast",
-                    model=BedrockModel(model_id=BEDROCK_MODEL_ID),
-                    tools=[get_weather, use_llm],
-                    system_prompt=get_system_prompt(),
-                    # session_manager=session_manager,
-                )
-                print(f"Agent initialized - Model: {BEDROCK_MODEL_ID}, Session: {session_id}, Messages loaded: {len(agent.messages)}")
+            agent = Agent(
+                agent_id="wearcast",
+                model=BedrockModel(model_id=BEDROCK_MODEL_ID),
+                tools=[get_weather, use_llm],
+                system_prompt=get_system_prompt(),
+            )
+            print(f"Agent initialized - Model: {BEDROCK_MODEL_ID}, Session: {session_id}, Messages loaded: {len(agent.messages)}")
 
             print(f"Messages in context: {len(agent.messages)}")
 
@@ -399,14 +397,14 @@ def invoke(payload):
             runtime_session_id = f"session_{uuid.uuid4().hex[:16]}"
             print(f"Warning: Generated session ID: {runtime_session_id}")
 
-        session_manager = create_session_manager(runtime_session_id, user_id)
+        # session_manager = create_session_manager(runtime_session_id, user_id)
 
         agent = Agent(
             agent_id="wearcast",
             model=BedrockModel(model_id=BEDROCK_MODEL_ID),
             tools=[get_weather, use_llm],
             system_prompt=get_system_prompt(),
-            session_manager=session_manager,
+            # session_manager=session_manager,
         )
 
         print(f"Agent initialized with model: {BEDROCK_MODEL_ID}, session: {runtime_session_id}")
