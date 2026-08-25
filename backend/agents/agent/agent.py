@@ -5,7 +5,7 @@ A weather-based clothing advisor with:
 - Real-time streaming via WebSocket
 - Memory persistence across conversations
 - JWT-based user authentication
-- get_weather tool (Open-Meteo, no API key required)
+- No tools — the model relies solely on its own knowledge and must say so
 
 Required Environment Variables:
     - AGENTCORE_MEMORY_ID: AgentCore Memory resource ID for conversation persistence
@@ -17,11 +17,8 @@ Optional Environment Variables:
 
 import os
 import json
-import urllib.request
-import urllib.parse
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
-from strands import Agent, tool
-from strands_tools import use_llm
+from strands import Agent
 from strands.models import BedrockModel
 from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig
 from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager
@@ -40,176 +37,45 @@ if not AGENTCORE_MEMORY_ID:
     raise ValueError("AGENTCORE_MEMORY_ID environment variable is required but not set")
 
 # ============================================================================
-# Weather tool
+# System prompt
 # ============================================================================
 
-# WMO weather interpretation codes → human-readable condition strings
-_WMO_CONDITIONS = {
-    0: "clear sky",
-    1: "mainly clear",
-    2: "partly cloudy",
-    3: "overcast",
-    45: "foggy",
-    48: "icy fog",
-    51: "light drizzle",
-    53: "moderate drizzle",
-    55: "heavy drizzle",
-    61: "light rain",
-    63: "moderate rain",
-    65: "heavy rain",
-    71: "light snow",
-    73: "moderate snow",
-    75: "heavy snow",
-    77: "snow grains",
-    80: "light showers",
-    81: "moderate showers",
-    82: "heavy showers",
-    85: "light snow showers",
-    86: "heavy snow showers",
-    95: "thunderstorm",
-    96: "thunderstorm with light hail",
-    99: "thunderstorm with heavy hail",
-}
-
-
-@tool
-def get_weather(city: str, date: str = "today") -> dict:
-    """Get weather conditions for a city, either current or for a future date (up to 16 days ahead).
-
-    IMPORTANT: This tool DOES support future date forecasts. Always pass a date parameter.
-
-    Makes two calls to Open-Meteo (no API key required):
-    1. Geocoding to resolve city name to lat/lon.
-    2. Forecast for weather conditions (current if date is "today", or daily forecast for a YYYY-MM-DD date).
-
-    Args:
-        city: City name to look up (e.g. "Indianapolis", "Chicago").
-        date: Date for the forecast. Use "today" for current conditions, or a YYYY-MM-DD
-              format string for a future date (up to 16 days ahead). Examples: "today", "2025-01-20".
-
-    Returns:
-        Dict with keys: city, temperature, feels_like, precipitation, wind_speed, condition, date.
-        All temperatures in °F, wind in km/h, precipitation in mm.
-        Returns {"error": str} if the city is not found or the date is out of range.
-    """
-    from datetime import datetime, timedelta
-
-    # Step 1 — geocode
-    geo_url = (
-        "https://geocoding-api.open-meteo.com/v1/search"
-        f"?name={urllib.parse.quote(city)}&count=1"
-    )
-    with urllib.request.urlopen(geo_url, timeout=10) as resp:
-        geo_data = json.loads(resp.read())
-
-    results = geo_data.get("results")
-    if not results:
-        return {"error": f"City not found: {city}"}
-
-    place = results[0]
-    lat, lon = place["latitude"], place["longitude"]
-    resolved_name = place.get("name", city)
-
-    # Step 2 — determine if we need current or future forecast
-    if date and date.lower() != "today":
-        # Validate the date
-        try:
-            target_date = datetime.strptime(date, "%Y-%m-%d").date()
-        except ValueError:
-            return {"error": f"Invalid date format: {date}. Use YYYY-MM-DD."}
-
-        today = datetime.utcnow().date()
-        days_ahead = (target_date - today).days
-
-        if days_ahead < 0:
-            # Date is in the past — fall back to current conditions with a note
-            return get_weather(city, "today")
-        if days_ahead > 16:
-            return {"error": f"Date {date} is too far ahead. Open-Meteo supports up to 16 days of forecast."}
-
-        # Use daily forecast endpoint
-        forecast_url = (
-            "https://api.open-meteo.com/v1/forecast"
-            f"?latitude={lat}&longitude={lon}"
-            f"&daily=temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,precipitation_sum,weather_code,wind_speed_10m_max"
-            f"&temperature_unit=fahrenheit"
-            f"&start_date={date}&end_date={date}"
-        )
-        with urllib.request.urlopen(forecast_url, timeout=10) as resp:
-            forecast_data = json.loads(resp.read())
-
-        daily = forecast_data["daily"]
-        code = daily["weather_code"][0]
-        condition = _WMO_CONDITIONS.get(code, f"weather code {code}")
-
-        temp_max = daily["temperature_2m_max"][0]
-        temp_min = daily["temperature_2m_min"][0]
-        feels_max = daily["apparent_temperature_max"][0]
-        feels_min = daily["apparent_temperature_min"][0]
-
-        return {
-            "city": resolved_name,
-            "date": date,
-            "temperature_high": temp_max,
-            "temperature_low": temp_min,
-            "feels_like_high": feels_max,
-            "feels_like_low": feels_min,
-            "precipitation": daily["precipitation_sum"][0],
-            "wind_speed": daily["wind_speed_10m_max"][0],
-            "condition": condition,
-        }
-    else:
-        # Current conditions (original behavior)
-        forecast_url = (
-            "https://api.open-meteo.com/v1/forecast"
-            f"?latitude={lat}&longitude={lon}"
-            "&current=temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m"
-            "&temperature_unit=fahrenheit"
-        )
-        with urllib.request.urlopen(forecast_url, timeout=10) as resp:
-            forecast_data = json.loads(resp.read())
-
-        current = forecast_data["current"]
-        code = current["weather_code"]
-        condition = _WMO_CONDITIONS.get(code, f"weather code {code}")
-
-        return {
-            "city": resolved_name,
-            "date": "today",
-            "temperature": current["temperature_2m"],
-            "feels_like": current["apparent_temperature"],
-            "precipitation": current["precipitation"],
-            "wind_speed": current["wind_speed_10m"],
-            "condition": condition,
-        }
-
-
-# ============================================================================
-
-SYSTEM_PROMPT_TEMPLATE = """You are WearCast, a friendly weather-based clothing advisor. \
-When the user asks about a city, use the get_weather tool to fetch current or forecast \
-conditions, then give practical outfit recommendations based on the real data.
+SYSTEM_PROMPT_TEMPLATE = """You are WearCast, a weather-based clothing advisor.
 
 TODAY'S DATE: {today} ({day_of_week}).
 
-Workflow:
-1. Use get_weather(city, date) to get real conditions. Use "today" for current weather \
-or a YYYY-MM-DD string for future dates (up to 16 days ahead).
-2. Analyze temperature, wind, precipitation, and condition from the tool response.
-3. Provide a clothing recommendation based on the actual forecast.
+CRITICAL — READ BEFORE ANSWERING:
+You have NO TOOLS. You have NO connection to any weather API, forecast service, or \
+live data source of any kind. You cannot know the actual temperature, precipitation \
+chance, wind speed, or condition for any city on any date, including today.
 
-Reasoning guidelines:
-- Heavy coat < 20 °F, winter coat 20–35 °F, jacket 35–55 °F, \
-light layer 55–70 °F, light clothing > 70 °F.
-- Recommend an umbrella or rain jacket if precipitation > 0 or condition includes rain/showers.
-- Factor in wind speed and feels-like temperature for layering advice.
-- Combine all factors into one coherent recommendation.
+STRICTLY FORBIDDEN in every response:
+- Do NOT state a specific temperature (e.g. "80°F", "around 75 degrees").
+- Do NOT state a specific precipitation percentage or wind description as fact.
+- Do NOT present invented numbers in a table, list, or day-by-day breakdown as if \
+they were real forecast data.
+Producing specific-looking numbers you were not given is fabrication, not a helpful \
+answer, even if it "sounds" plausible.
+
+REQUIRED — every single response must:
+1. Begin with an explicit disclosure sentence, e.g. "I don't have access to a weather \
+tool or live data, so I can't give you an actual forecast for {{city}}." Do this even \
+if the user didn't ask about weather.
+2. Direct the user to check a real weather source (e.g. a weather app or website) for \
+actual conditions.
+3. Only after that, optionally offer general seasonal/climate knowledge (e.g. "early \
+September in Texas is typically hot and sunny") clearly framed as a general pattern, \
+never as today's or a specific date's actual numbers.
+
+Scope:
+- Only engage with weather and weather-appropriate clothing topics. If the user asks \
+about anything else, politely decline and redirect to weather/clothing topics.
 
 Response style:
-- Write 3–5 sentences so the token stream is visibly satisfying.
-- Start with the city name and actual conditions.
-- End with a concrete outfit recommendation.
-- Format responses in Markdown."""
+- 3-5 sentences, Markdown formatted.
+- No fabricated per-day tables or bullet lists of numeric conditions.
+- End with a clothing suggestion explicitly framed as a general/typical-season \
+estimate, not tied to specific numbers."""
 
 
 def get_system_prompt() -> str:
@@ -294,7 +160,6 @@ async def websocket_handler(websocket, context):
                 agent = Agent(
                     agent_id="wearcast",
                     model=BedrockModel(model_id=BEDROCK_MODEL_ID),
-                    tools=[get_weather, use_llm],
                     system_prompt=get_system_prompt(),
                     session_manager=session_manager,
                 )
@@ -404,7 +269,6 @@ def invoke(payload):
         agent = Agent(
             agent_id="wearcast",
             model=BedrockModel(model_id=BEDROCK_MODEL_ID),
-            tools=[get_weather, use_llm],
             system_prompt=get_system_prompt(),
             session_manager=session_manager,
         )
