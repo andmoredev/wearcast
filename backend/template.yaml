@@ -202,8 +202,6 @@ Resources:
       MemoryExecutionRoleArn: !GetAtt AgentCoreRole.Arn
       EventExpiryDuration: 30
 
-  # Bedrock Guardrail - enforces safe/on-topic behavior at the model layer,
-  # independent of the system prompt (jailbreak-resistant).
   WearCastGuardrail:
     Type: AWS::Bedrock::Guardrail
     Properties:
@@ -229,7 +227,7 @@ Resources:
             InputStrength: HIGH
             OutputStrength: HIGH
           - Type: PROMPT_ATTACK
-            InputStrength: HIGH
+            InputStrength: MEDIUM
             OutputStrength: NONE
       TopicPolicyConfig:
         TopicsConfig:
