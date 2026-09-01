@@ -233,6 +233,13 @@ Resources:
         TopicsConfig:
           - Name: OffTopicRequests
             Type: DENY
+            # Evaluate/block only the USER INPUT. Do NOT evaluate the agent's
+            # output: the topic classifier was flagging legitimate weather
+            # answers as off-topic and blocking them (false positives).
+            InputAction: BLOCK
+            InputEnabled: true
+            OutputAction: NONE
+            OutputEnabled: false
             Definition: >-
               Any request not about weather or weather-appropriate clothing
               and outfit advice for a location and date, including coding,
