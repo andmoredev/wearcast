@@ -13,6 +13,7 @@ interface Message {
   sender: 'user' | 'agent'
   timestamp: Date
   error?: boolean
+  blocked?: boolean
   streaming?: boolean
 }
 
@@ -35,6 +36,7 @@ function Chat() {
   // Refs to track streaming state for use in event handler closures
   const streamingTextRef = useRef('')
   const thinkingTextRef = useRef('')
+  const blockedRef = useRef(false)
 
   // Ensure the context has the session ID from the URL (or generate one)
   useEffect(() => {
@@ -86,10 +88,17 @@ function Chat() {
     }
   }, [])
 
+  // Handle a guardrail block for the current turn. The refusal text itself
+  // streams in as normal data; this event just flags it so we can style it.
+  const handleBlocked = useCallback(() => {
+    blockedRef.current = true
+  }, [])
+
   // Handle completion of streaming
   const handleComplete = useCallback(() => {
     const currentStreaming = streamingTextRef.current
     const currentThinking = thinkingTextRef.current
+    const wasBlocked = blockedRef.current
 
     if (currentStreaming || currentThinking) {
       const agentMessage: Message = {
@@ -97,13 +106,15 @@ function Chat() {
         text: currentStreaming,
         ...(currentThinking ? { thinking: currentThinking } : {}),
         sender: 'agent',
-        timestamp: new Date()
+        timestamp: new Date(),
+        ...(wasBlocked ? { blocked: true } : {})
       }
       setMessages(prev => [...prev, agentMessage])
     }
 
     streamingTextRef.current = ''
     thinkingTextRef.current = ''
+    blockedRef.current = false
     setStreamingText('')
     setThinkingText('')
     setCurrentTool(null)
@@ -135,14 +146,16 @@ function Chat() {
   useEffect(() => {
     on('stream_event', handleStreamEvent)
     on('complete', handleComplete)
+    on('blocked', handleBlocked)
     on('error', handleError)
 
     return () => {
       off('stream_event', handleStreamEvent)
       off('complete', handleComplete)
+      off('blocked', handleBlocked)
       off('error', handleError)
     }
-  }, [on, off, handleStreamEvent, handleComplete, handleError])
+  }, [on, off, handleStreamEvent, handleComplete, handleBlocked, handleError])
 
   // Shared helper: constructs user message, updates UI state, and sends via WebSocket
   const sendMessage = (text: string) => {
@@ -158,6 +171,7 @@ function Chat() {
     setIsLoading(true)
     streamingTextRef.current = ''
     thinkingTextRef.current = ''
+    blockedRef.current = false
     setStreamingText('')
     setThinkingText('')
 
@@ -227,8 +241,14 @@ function Chat() {
 
       <div className="chat-messages">
         {messages.map(message => (
-          <div key={message.id} className={`message ${message.sender} ${message.error ? 'error' : ''}`}>
+          <div key={message.id} className={`message ${message.sender} ${message.error ? 'error' : ''} ${message.blocked ? 'blocked' : ''}`}>
             <div className="message-content">
+              {message.blocked && (
+                <div className="blocked-badge">
+                  <span className="blocked-icon">&#128737;</span>
+                  <span>Blocked by content guardrails</span>
+                </div>
+              )}
               {message.thinking && (
                 <details className="thinking-section">
                   <summary>Thinking</summary>
