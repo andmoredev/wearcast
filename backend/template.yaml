@@ -220,16 +220,6 @@ Resources:
       Description: Blocks harmful content, prompt attacks, and non-weather off-topic requests for the WearCast demo
       BlockedInputMessaging: "I'm WearCast — I can only help with weather and what to wear. Tell me a city (and a day) and I'll take it from there."
       BlockedOutputsMessaging: "I'm WearCast — I can only help with weather and what to wear. Tell me a city (and a day) and I'll take it from there."
-      # Topic policy uses a POSITIVE enumeration of off-topic categories
-      # (code, building things, math, general knowledge) rather than a
-      # negation ("anything not about weather"). The negation form caused
-      # false positives, classifying legitimate weather questions as
-      # off-topic. This form was validated live against real prompts:
-      #   "What should I wear in Indianapolis today?"  -> NONE  (pass)
-      #   "plano texas septemer 2-4"                   -> NONE  (pass)
-      #   "I need a python script..."                  -> BLOCKED
-      #   "how do I build a model car?"                -> BLOCKED
-      #   (weather ANSWER on output)                   -> NONE  (pass)
       ContentPolicyConfig:
         FiltersConfig:
           - Type: HATE
@@ -273,10 +263,6 @@ Resources:
     Type: AWS::Bedrock::GuardrailVersion
     Properties:
       GuardrailIdentifier: !GetAtt WearCastGuardrail.GuardrailId
-      # Description embeds GuardrailConfigVersion so that bumping the parameter
-      # replaces this resource and creates a NEW numbered guardrail version.
-      # The runtime references .Version below, so it always points at the
-      # latest cut version instead of a stale frozen one.
       Description: !Sub "WearCast guardrail ${EnvironmentHash} config ${GuardrailConfigVersion}"
 
   AgentCoreRuntime:
