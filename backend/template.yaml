@@ -24,7 +24,7 @@ Parameters:
       CloudFormation to cut a NEW guardrail version and repoint the agent at
       it. Without this, config edits only update DRAFT and the agent keeps
       using the old frozen version.
-    Default: "3"
+    Default: "4"
 
 Globals:
   Function:
@@ -216,15 +216,19 @@ Resources:
     Type: AWS::Bedrock::Guardrail
     Properties:
       Name: !Sub WearCast${EnvironmentHash}
-      Description: Blocks harmful content and prompt attacks for the WearCast demo (topic scope handled by the agent system prompt)
+      Description: Blocks harmful content, prompt attacks, and non-weather off-topic requests for the WearCast demo
       BlockedInputMessaging: "I'm WearCast — I can only help with weather and what to wear. Tell me a city (and a day) and I'll take it from there."
       BlockedOutputsMessaging: "I'm WearCast — I can only help with weather and what to wear. Tell me a city (and a day) and I'll take it from there."
-      # NOTE: We intentionally do NOT use a denied-topic policy. The Bedrock
-      # topic classifier produced false positives on legitimate weather
-      # questions (e.g. "What should I wear in Indianapolis today?" was
-      # classified as off-topic and BLOCKED on input). Scope enforcement is
-      # handled reliably by the agent's system prompt; content filters below
-      # handle genuine abuse (verified: violent/harassing input is BLOCKED).
+      # Topic policy uses a POSITIVE enumeration of off-topic categories
+      # (code, building things, math, general knowledge) rather than a
+      # negation ("anything not about weather"). The negation form caused
+      # false positives, classifying legitimate weather questions as
+      # off-topic. This form was validated live against real prompts:
+      #   "What should I wear in Indianapolis today?"  -> NONE  (pass)
+      #   "plano texas septemer 2-4"                   -> NONE  (pass)
+      #   "I need a python script..."                  -> BLOCKED
+      #   "how do I build a model car?"                -> BLOCKED
+      #   (weather ANSWER on output)                   -> NONE  (pass)
       ContentPolicyConfig:
         FiltersConfig:
           - Type: HATE
@@ -245,6 +249,24 @@ Resources:
           - Type: PROMPT_ATTACK
             InputStrength: MEDIUM
             OutputStrength: NONE
+      TopicPolicyConfig:
+        TopicsConfig:
+          - Name: NonWeatherTasks
+            Type: DENY
+            InputAction: BLOCK
+            InputEnabled: true
+            OutputAction: BLOCK
+            OutputEnabled: true
+            Definition: >-
+              Requests to write code or scripts, build or make physical
+              objects, do math, explain general knowledge or how-to topics,
+              or any task that is not asking for weather conditions or what
+              clothing to wear.
+            Examples:
+              - "I need a python script to calculate the weather"
+              - "Write me a Python function."
+              - "How do I build a model car?"
+              - "Explain how photosynthesis works."
 
   WearCastGuardrailVersion:
     Type: AWS::Bedrock::GuardrailVersion
