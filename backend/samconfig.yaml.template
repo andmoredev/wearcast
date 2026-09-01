@@ -27,6 +27,11 @@ default:
         - ArtifactsBucketName=$ARTIFACTS_BUCKET_NAME
         - AgentDirectDeployKey=$AGENT_DIRECT_DEPLOY_KEY
         - EnvironmentHash=$ENV_HASH
+        # Must be passed explicitly. If omitted, sam reuses the previously
+        # deployed value ("use previous value"), so template default bumps
+        # are ignored and the guardrail version never rolls forward. Bump
+        # this whenever the guardrail policy changes.
+        - GuardrailConfigVersion=${GUARDRAIL_CONFIG_VERSION}
       tags:
         - caylent:owner=andres.moreno@caylent.com thiago.ianino@caylent.com
         - caylent:workload=GenAI-POV

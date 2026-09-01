@@ -19,12 +19,13 @@ Parameters:
   GuardrailConfigVersion:
     Type: String
     Description: >-
-      Bump this value whenever the guardrail policy configuration changes.
-      AWS::Bedrock::GuardrailVersion is immutable, so changing this forces
-      CloudFormation to cut a NEW guardrail version and repoint the agent at
-      it. Without this, config edits only update DRAFT and the agent keeps
-      using the old frozen version.
-    Default: "4"
+      Auto-computed hash of the guardrail policy config, supplied by the deploy
+      pipeline (a sha1 of the WearCastGuardrail resource block). It changes if
+      and only if the guardrail policy changes, which forces CloudFormation to
+      cut a NEW immutable guardrail version and repoint the agent at it. This
+      is fully automatic — do NOT set it by hand. The default is only a
+      fallback for guided/local deploys that don't pass it.
+    Default: "auto"
 
 Globals:
   Function:
