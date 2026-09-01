@@ -16,6 +16,16 @@ Parameters:
     Type: String
     Description: A hash of the current environment
 
+  GuardrailConfigVersion:
+    Type: String
+    Description: >-
+      Bump this value whenever the guardrail policy configuration changes.
+      AWS::Bedrock::GuardrailVersion is immutable, so changing this forces
+      CloudFormation to cut a NEW guardrail version and repoint the agent at
+      it. Without this, config edits only update DRAFT and the agent keeps
+      using the old frozen version.
+    Default: "2"
+
 Globals:
   Function:
     Timeout: 30
@@ -233,9 +243,6 @@ Resources:
         TopicsConfig:
           - Name: OffTopicRequests
             Type: DENY
-            # Evaluate/block only the USER INPUT. Do NOT evaluate the agent's
-            # output: the topic classifier was flagging legitimate weather
-            # answers as off-topic and blocking them (false positives).
             InputAction: BLOCK
             InputEnabled: true
             OutputAction: NONE
@@ -255,7 +262,11 @@ Resources:
     Type: AWS::Bedrock::GuardrailVersion
     Properties:
       GuardrailIdentifier: !GetAtt WearCastGuardrail.GuardrailId
-      Description: !Sub "WearCast guardrail ${EnvironmentHash}"
+      # Description embeds GuardrailConfigVersion so that bumping the parameter
+      # replaces this resource and creates a NEW numbered guardrail version.
+      # The runtime references .Version below, so it always points at the
+      # latest cut version instead of a stale frozen one.
+      Description: !Sub "WearCast guardrail ${EnvironmentHash} config ${GuardrailConfigVersion}"
 
   AgentCoreRuntime:
     Type: AWS::BedrockAgentCore::Runtime
