@@ -10,7 +10,7 @@ import { authService } from './auth';
 import { apiService } from './api';
 
 export interface StreamEvent {
-  type: 'stream_event' | 'complete' | 'error' | 'auth_success';
+  type: 'stream_event' | 'complete' | 'error' | 'auth_success' | 'blocked';
   event?: any;
   session_id?: string;
   error?: string;

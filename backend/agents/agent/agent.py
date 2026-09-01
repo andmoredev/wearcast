@@ -36,8 +36,80 @@ AGENTCORE_MEMORY_ID = os.environ.get("AGENTCORE_MEMORY_ID")
 AWS_REGION = os.environ.get("AWS_REGION", os.environ.get("AWS_DEFAULT_REGION", "us-east-1"))
 BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "us.amazon.nova-lite-v1:0")
 
+# Optional Bedrock Guardrail — enforces safe/on-topic behavior at the model
+# layer, independent of the system prompt. Set via the SAM template.
+BEDROCK_GUARDRAIL_ID = os.environ.get("BEDROCK_GUARDRAIL_ID")
+BEDROCK_GUARDRAIL_VERSION = os.environ.get("BEDROCK_GUARDRAIL_VERSION")
+
 if not AGENTCORE_MEMORY_ID:
     raise ValueError("AGENTCORE_MEMORY_ID environment variable is required but not set")
+
+
+# Stop reasons that indicate the guardrail (or content filter) blocked the turn.
+_GUARDRAIL_STOP_REASONS = {"guardrail_intervened", "content_filtered"}
+
+# Client-facing metadata sent with a "blocked" event so the UI can style the
+# refusal differently. The visible bubble text still comes from the guardrail's
+# configured blocked messaging (streamed as normal data).
+GUARDRAIL_BLOCKED_MESSAGE = "This request was blocked by content guardrails."
+
+
+def _extract_stop_reason(event: dict):
+    """Best-effort extraction of a stop reason from a Strands stream event.
+
+    The stop reason can appear at the top level or nested inside the
+    completion result/message depending on the event, so check a few known
+    locations without assuming a single shape.
+    """
+    if not isinstance(event, dict):
+        return None
+
+    reason = event.get("stop_reason") or event.get("stopReason")
+    if reason:
+        return reason
+
+    result = event.get("result")
+    if result is not None:
+        reason = getattr(result, "stop_reason", None)
+        if reason:
+            return reason
+        if isinstance(result, dict):
+            reason = result.get("stop_reason") or result.get("stopReason")
+            if reason:
+                return reason
+
+    message = event.get("message")
+    if isinstance(message, dict):
+        reason = message.get("stop_reason") or message.get("stopReason")
+        if reason:
+            return reason
+
+    return None
+
+
+def _is_guardrail_stop(stop_reason) -> bool:
+    """True if the stop reason indicates a guardrail/content-filter block."""
+    return isinstance(stop_reason, str) and stop_reason in _GUARDRAIL_STOP_REASONS
+
+
+def create_model() -> BedrockModel:
+    """Build the Bedrock model, attaching a guardrail when configured."""
+    kwargs = {"model_id": BEDROCK_MODEL_ID}
+
+    if BEDROCK_GUARDRAIL_ID and BEDROCK_GUARDRAIL_VERSION:
+        kwargs.update(
+            guardrail_id=BEDROCK_GUARDRAIL_ID,
+            guardrail_version=BEDROCK_GUARDRAIL_VERSION,
+            guardrail_trace="enabled",
+        )
+        print(
+            f"Guardrail enabled - ID: {BEDROCK_GUARDRAIL_ID}, "
+            f"Version: {BEDROCK_GUARDRAIL_VERSION}"
+        )
+    else:
+        print("No guardrail configured - running without content filtering")
+
+    return BedrockModel(**kwargs)
 
 # ============================================================================
 # Weather tool
@@ -325,7 +397,7 @@ async def websocket_handler(websocket, context):
 
                 agent = Agent(
                     agent_id="wearcast",
-                    model=BedrockModel(model_id=BEDROCK_MODEL_ID),
+                    model=create_model(),
                     tools=[get_weather, use_llm],
                     system_prompt=get_system_prompt(),
                     session_manager=session_manager,
@@ -335,12 +407,19 @@ async def websocket_handler(websocket, context):
             print(f"Messages in context: {len(agent.messages)}")
 
             # Stream events back to client in real-time
+            guardrail_blocked = False
             async for event in agent.stream_async(request):
                 # Extract only JSON-serializable data from the event.
                 # stream_async() can yield events containing non-serializable objects
                 # (e.g. the Agent instance in completion events), so we pick out
                 # the fields the client actually needs.
                 client_event = None
+
+                # Detect guardrail/content-filter interventions. Bedrock reports
+                # these via a stop reason, which Strands surfaces on the event
+                # (top-level or nested in the completion result/message).
+                if _is_guardrail_stop(_extract_stop_reason(event)):
+                    guardrail_blocked = True
 
                 if event.get("data"):
                     client_event = {"data": event["data"]}
@@ -364,6 +443,16 @@ async def websocket_handler(websocket, context):
                         "type": "stream_event",
                         "event": client_event
                     })
+
+            # If a guardrail intervened, tell the client explicitly so the UI
+            # can style the refusal differently from a normal response.
+            if guardrail_blocked:
+                print(f"🛡️ Guardrail intervened - Session: {session_id}")
+                await websocket.send_json({
+                    "type": "blocked",
+                    "session_id": session_id,
+                    "message": GUARDRAIL_BLOCKED_MESSAGE,
+                })
 
             # Send completion signal for this turn
             await websocket.send_json({
@@ -435,7 +524,7 @@ def invoke(payload):
 
         agent = Agent(
             agent_id="wearcast",
-            model=BedrockModel(model_id=BEDROCK_MODEL_ID),
+            model=create_model(),
             tools=[get_weather, use_llm],
             system_prompt=get_system_prompt(),
             session_manager=session_manager,
