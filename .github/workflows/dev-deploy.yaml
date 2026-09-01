@@ -35,7 +35,11 @@ jobs:
       env_name: ${{ steps.prepare-parameters.outputs.env_name }}
       backend_stack_name: ${{ steps.prepare-parameters.outputs.backend_stack_name }}
       frontend_stack_name: ${{ steps.prepare-parameters.outputs.frontend_stack_name }}
+      guardrail_config_version: ${{ steps.prepare-parameters.outputs.guardrail_config_version }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Prepare parameters
         id: prepare-parameters
         run: |
@@ -45,11 +49,17 @@ jobs:
           BACKEND_STACK_NAME="${{ env.BACKEND_STACK_NAME }}-$ENV_DESCRIPTOR"
           FRONTEND_STACK_NAME="${{ env.FRONTEND_STACK_NAME }}-$ENV_DESCRIPTOR"
 
+          # Auto-derive the guardrail version marker from the guardrail config
+          # in template.yaml. Changes only when the policy changes, forcing a
+          # new guardrail version + runtime repoint automatically (no manual step).
+          GUARDRAIL_CONFIG_VERSION=$(sed -n '/^  WearCastGuardrail:/,/^  WearCastGuardrailVersion:/p' backend/template.yaml | sha1sum | cut -c1-8)
+
           echo "env_descriptor=$ENV_DESCRIPTOR" >> $GITHUB_OUTPUT
           echo "env_hash=$ENV_HASH" >> $GITHUB_OUTPUT
           echo "env_name=$ENV_NAME" >> $GITHUB_OUTPUT
           echo "backend_stack_name=$BACKEND_STACK_NAME" >> $GITHUB_OUTPUT
           echo "frontend_stack_name=$FRONTEND_STACK_NAME" >> $GITHUB_OUTPUT
+          echo "guardrail_config_version=$GUARDRAIL_CONFIG_VERSION" >> $GITHUB_OUTPUT
 
           cat >> $GITHUB_STEP_SUMMARY << EOF
           # Dev Environment Deployment
@@ -57,6 +67,7 @@ jobs:
           * Environment Hash: \`$ENV_HASH\`
           * Backend Stack: \`$BACKEND_STACK_NAME\`
           * Frontend Stack: \`$FRONTEND_STACK_NAME\`
+          * Guardrail Config Version: \`$GUARDRAIL_CONFIG_VERSION\`
           * Trigger: Automatic deployment on main branch merge
           EOF
 
@@ -152,6 +163,7 @@ jobs:
           ARTIFACTS_BUCKET_NAME: ${{ secrets.ARTIFACTS_BUCKET_NAME }}
           AGENT_DIRECT_DEPLOY_KEY: ${{ needs.collect-agent-artifacts.outputs.agent-key }}
           AWS_REGION: ${{ env.AWS_REGION }}
+          GUARDRAIL_CONFIG_VERSION: ${{ needs.prepare-deployment.outputs.guardrail_config_version }}
 
         run: |
           envsubst < samconfig.yaml.template > samconfig.yaml

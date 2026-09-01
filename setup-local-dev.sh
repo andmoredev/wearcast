@@ -112,6 +112,9 @@ if [ "$DEPLOY_BACKEND" = "true" ]; then
     print_step "Creating SAM configuration..."
     export STACK_NAME="$BACKEND_STACK_NAME"
     export AWS_REGION="$AWS_REGION"
+    # Auto-derive guardrail version marker from the guardrail config so a new
+    # version is cut automatically whenever the policy changes (no manual step).
+    export GUARDRAIL_CONFIG_VERSION=$(sed -n '/^  WearCastGuardrail:/,/^  WearCastGuardrailVersion:/p' template.yaml | sha1sum | cut -c1-8)
     envsubst < samconfig.yaml.template > samconfig.yaml
 
     print_success "SAM configuration created"
