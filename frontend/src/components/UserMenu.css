@@ -19,10 +19,10 @@
 }
 
 .user-menu-button:hover {
-  background: rgba(255, 107, 53, 0.12);
-  border-color: rgba(255, 107, 53, 0.3);
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.3);
   color: var(--text-primary);
-  box-shadow: 0 0 12px rgba(255, 107, 53, 0.15);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.15);
 }
 
 .user-menu-button:active {
@@ -159,7 +159,7 @@
 
 .user-menu-edit-button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 
 .user-menu-edit-button:active {
@@ -178,7 +178,7 @@
   width: 100%;
   padding: 0.75rem;
   background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 107, 53, 0.25);
+  border: 1px solid rgba(16, 185, 129, 0.25);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
   font-size: 0.875rem;
@@ -194,7 +194,7 @@
   outline: none;
   border-color: var(--primary);
   background: rgba(255, 255, 255, 0.06);
-  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
 }
 
 .user-menu-input::placeholder {
@@ -223,7 +223,7 @@
 
 .user-menu-save:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 
 .user-menu-save:active {

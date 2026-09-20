@@ -5,11 +5,11 @@
   font-weight: 400;
 
   /* Color Palette */
-  --primary: #FF6B35;
-  --primary-hover: #E55A2B;
-  --primary-light: rgba(255, 107, 53, 0.1);
-  --primary-coral: #FF8A65;
-  --gradient-primary: linear-gradient(135deg, #FF6B35, #FF8A65);
+  --primary: #10B981;
+  --primary-hover: #059669;
+  --primary-light: rgba(16, 185, 129, 0.1);
+  --primary-coral: #3B82F6;
+  --gradient-primary: linear-gradient(135deg, #10B981, #3B82F6);
 
   --bg-base: #0a0f1a;
   --bg-surface: #111827;
@@ -32,7 +32,7 @@
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
-  --shadow-glow: 0 0 20px rgba(255, 107, 53, 0.15);
+  --shadow-glow: 0 0 20px rgba(16, 185, 129, 0.15);
 
   color-scheme: dark;
   color: var(--text-primary);
@@ -86,7 +86,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   background: var(--bg-base);
-  background-image: radial-gradient(ellipse at 50% 0%, rgba(255, 107, 53, 0.03) 0%, transparent 60%);
+  background-image: radial-gradient(ellipse at 50% 0%, rgba(16, 185, 129, 0.03) 0%, transparent 60%);
 }
 
 h1 {
@@ -263,7 +263,7 @@ select:focus-visible {
 
 .nav-button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 
 /* Home Styles */
@@ -366,12 +366,12 @@ select:focus-visible {
   transition: all 0.2s ease;
   min-width: 44px;
   height: 44px;
-  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 
 .home-send-button:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(255, 107, 53, 0.4);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
 }
 
 .home-send-button:active:not(:disabled) {
@@ -408,8 +408,8 @@ select:focus-visible {
 }
 
 .example-query {
-  background: rgba(255, 107, 53, 0.08);
-  border: 1px solid rgba(255, 107, 53, 0.2);
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.2);
   border-radius: 100px;
   padding: 0.6rem 1.2rem;
   color: var(--text-secondary);
@@ -422,10 +422,10 @@ select:focus-visible {
 
 .example-query:hover:not(:disabled) {
   border-color: var(--primary);
-  background: rgba(255, 107, 53, 0.15);
+  background: rgba(16, 185, 129, 0.15);
   color: var(--text-primary);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.15);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
 }
 
 .example-query:disabled {
