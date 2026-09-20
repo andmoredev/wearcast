@@ -65,8 +65,8 @@
 }
 
 .back-home-button:hover {
-  background: rgba(255, 107, 53, 0.15);
-  border-color: rgba(255, 107, 53, 0.3);
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.3);
   color: var(--text-primary);
 }
 
@@ -135,18 +135,18 @@
 }
 
 .message.user {
-  background: linear-gradient(135deg, #FF6B35, #FF8A65);
+  background: linear-gradient(135deg, #10B981, #3B82F6);
   color: white;
   margin-left: auto;
   border-radius: 18px 18px 4px 18px;
-  box-shadow: 0 4px 16px rgba(255, 107, 53, 0.25);
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.25);
 }
 
 .message.agent {
   background: rgba(255, 255, 255, 0.03);
   color: var(--text-secondary);
   margin-right: auto;
-  border-left: 3px solid #FF6B35;
+  border-left: 3px solid #10B981;
   border-radius: 4px 18px 18px 18px;
 }
 
@@ -284,11 +284,11 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 0.75rem;
-  background: rgba(255, 107, 53, 0.08);
+  background: rgba(16, 185, 129, 0.08);
   border-radius: var(--radius-sm);
   font-size: 0.85rem;
   color: var(--text-secondary);
-  border: 1px solid rgba(255, 107, 53, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.15);
 }
 
 .tool-icon {
@@ -400,7 +400,7 @@
 .chat-input textarea:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
 }
 
 .chat-input button {
@@ -417,13 +417,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.25);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
   flex-shrink: 0;
 }
 
 .chat-input button:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(255, 107, 53, 0.35);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35);
 }
 
 .chat-input button:active:not(:disabled) {
